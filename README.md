@@ -1,36 +1,107 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+## PropertySuite
 
-## Getting Started
+PropertySuite is a unified real-estate and construction operations platform for Samarth Developers Pro Pvt. Ltd.
 
-First, run the development server:
+This repository now contains:
+
+1. A `Next.js 16` web app with App Router, `proxy.ts`, role-based login, `app/api/v1/*` endpoints, dashboard, module workspaces, PDF memo generation, Excel export, and document vault upload flow.
+2. An `Electron` desktop wrapper in [`electron`](./electron) that loads the same Next.js app.
+3. A `Flutter` Android client scaffold in [`mobile/flutter`](./mobile/flutter) that authenticates against the same `v1` API using bearer tokens.
+4. A MySQL schema and seed script in [`database/schema.sql`](./database/schema.sql) and [`scripts/setup-db.mjs`](./scripts/setup-db.mjs).
+
+## Stack
+
+- `next@16.2.4`
+- `react@19`
+- `mysql2`
+- `jose` JWT sessions
+- `bcryptjs`
+- `pdf-lib`
+- `nodemailer`
+- `twilio`
+- `xlsx`
+- `electron`
+- `flutter`
+
+## Environment
+
+Copy `.env.example` to `.env.local` and fill in the values:
+
+```bash
+cp .env.example .env.local
+```
+
+Required keys:
+
+- `APP_URL`
+- `APP_SESSION_SECRET`
+- `DB_HOST`
+- `DB_PORT`
+- `DB_NAME`
+- `DB_USER`
+- `DB_PASSWORD`
+
+Optional integrations:
+
+- `SMTP_*` for email
+- `TWILIO_*` for WhatsApp
+- `FILE_STORAGE_DIR` for document uploads under `storage/`
+
+## Web App
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Default admin after DB setup:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- Email: `admin@samarthdevelopers.local`
+- Password: `Admin@12345`
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Database Setup
 
-## Learn More
+```bash
+npm run db:setup
+```
 
-To learn more about Next.js, take a look at the following resources:
+This applies all tables and seeds:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- admin user
+- branding settings
+- default festival message templates
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Desktop App
 
-## Deploy on Vercel
+Development:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+npm run electron:dev
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Build:
+
+```bash
+npm run electron:build
+```
+
+## Flutter Android App
+
+Open `mobile/flutter` in Flutter tooling and run:
+
+```bash
+flutter pub get
+flutter run --dart-define=API_BASE_URL=http://YOUR_SERVER:3000
+```
+
+For an Android emulator on the same machine as the API, the scaffold defaults to:
+
+- `http://10.0.2.2:3000`
+
+## Verification
+
+The current codebase passes:
+
+```bash
+npm run lint
+npm run build
+```

@@ -1,0 +1,585 @@
+"use client";
+
+import { startTransition, useEffect, useState } from "react";
+import { Card } from "@/components/ui/card";
+import { DataTable } from "@/components/ui/data-table";
+import { StatCard } from "@/components/ui/stat-card";
+import { formatCurrency, formatNumber } from "@/lib/format";
+import type { GenericRecord, ModuleConfig, ModuleField } from "@/lib/types";
+
+interface ResourceWorkspaceProps {
+  module: ModuleConfig;
+}
+
+function createInitialState(fields: ModuleField[]) {
+  return fields.reduce<Record<string, string | number | boolean>>((accumulator, field) => {
+    accumulator[field.key] = field.type === "checkbox" ? false : "";
+    return accumulator;
+  }, {});
+}
+
+function formatInputValue(field: ModuleField, value: unknown) {
+  if (field.type === "checkbox") {
+    return Boolean(value);
+  }
+
+  if (!value) {
+    return "";
+  }
+
+  if (field.type === "datetime-local") {
+    return String(value).slice(0, 16);
+  }
+
+  if (field.type === "date") {
+    return String(value).slice(0, 10);
+  }
+
+  return String(value);
+}
+
+function toPayload(fields: ModuleField[], form: Record<string, string | number | boolean>) {
+  return Object.fromEntries(
+    fields.map((field) => {
+      const value = form[field.key];
+
+      if (field.type === "checkbox") {
+        return [field.key, Boolean(value)];
+      }
+
+      if (field.type === "number") {
+        return [field.key, value === "" ? null : Number(value)];
+      }
+
+      return [field.key, value];
+    }),
+  );
+}
+
+function computeSummary(summary: ModuleConfig["summaries"][number], rows: GenericRecord[]) {
+  if (summary.type === "count") {
+    return String(rows.length);
+  }
+
+  if (summary.type === "unique" && summary.field) {
+    const field = summary.field;
+    return String(
+      new Set(rows.map((row) => String(row[field] ?? ""))).size,
+    );
+  }
+
+  if (summary.type === "sum" && summary.field) {
+    const field = summary.field;
+    const total = rows.reduce(
+      (accumulator, row) => accumulator + Number(row[field] ?? 0),
+      0,
+    );
+
+    return summary.prefix ? formatCurrency(total) : formatNumber(total);
+  }
+
+  return "0";
+}
+
+export function ResourceWorkspace({ module }: ResourceWorkspaceProps) {
+  const [rows, setRows] = useState<GenericRecord[]>([]);
+  const [form, setForm] = useState(createInitialState(module.fields));
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [isRecordsModalOpen, setIsRecordsModalOpen] = useState(false);
+  const [uploadingField, setUploadingField] = useState<string | null>(null);
+
+  async function loadRows() {
+    if (!module.resource) {
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+
+    try {
+      const response = await fetch(`/api/v1/${module.resource}?limit=200`);
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Failed to load data.");
+      }
+
+      setRows(payload.data ?? []);
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "Failed to load data.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    let active = true;
+
+    async function run() {
+      if (!module.resource) {
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/v1/${module.resource}?limit=200`);
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(payload.error ?? "Failed to load data.");
+        }
+
+        if (active) {
+          setRows(payload.data ?? []);
+        }
+      } catch (nextError) {
+        if (active) {
+          setError(
+            nextError instanceof Error ? nextError.message : "Failed to load data.",
+          );
+        }
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void run();
+
+    return () => {
+      active = false;
+    };
+  }, [module.resource]);
+
+  async function handleFileUpload(file: File, key: string) {
+    setUploadingField(key);
+    setError("");
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      
+      const response = await fetch("/api/v1/upload", {
+        method: "POST",
+        body: formData,
+      });
+      
+      const result = await response.json();
+      if (response.ok && result.url) {
+        setForm((current) => ({
+          ...current,
+          [key]: result.url,
+        }));
+      } else {
+        setError(result.error || "Failed to upload image.");
+      }
+    } catch (err) {
+      setError("An error occurred during upload.");
+    } finally {
+      setUploadingField(null);
+    }
+  }
+
+  function resetForm() {
+    setEditingId(null);
+    setForm(createInitialState(module.fields));
+  }
+
+  function handleEdit(row: GenericRecord) {
+    const next = createInitialState(module.fields);
+
+    for (const field of module.fields) {
+      next[field.key] = formatInputValue(field, row[field.key]);
+    }
+
+    setEditingId(Number(row.id));
+    setForm(next);
+  }
+
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!module.resource) {
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+
+    try {
+      const response = await fetch(
+        editingId
+          ? `/api/v1/${module.resource}/${editingId}`
+          : `/api/v1/${module.resource}`,
+        {
+          method: editingId ? "PUT" : "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(toPayload(module.fields, form)),
+        },
+      );
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Save failed.");
+      }
+
+      resetForm();
+      startTransition(() => {
+        void loadRows();
+      });
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "Save failed.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete(row: GenericRecord) {
+    if (!module.resource || !row.id) {
+      return;
+    }
+
+    const confirmed = window.confirm("Delete this record?");
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/v1/${module.resource}/${row.id}`, {
+        method: "DELETE",
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Delete failed.");
+      }
+
+      startTransition(() => {
+        void loadRows();
+      });
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "Delete failed.");
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <Card className="relative overflow-hidden">
+        <div className="absolute -right-14 top-0 h-44 w-44 rounded-full bg-accent-soft blur-3xl" />
+        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-accent">
+          {module.badge}
+        </p>
+        <h2 className="mt-3 text-3xl font-semibold text-ink">{module.title}</h2>
+        <p className="mt-3 max-w-3xl text-sm leading-7 text-muted">
+          {module.subtitle}
+        </p>
+        {module.resource ? (
+          <div className="mt-5 flex flex-wrap gap-3">
+            <a
+              className="rounded-full bg-black px-5 py-3 text-xs font-semibold uppercase tracking-[0.24em] text-white"
+              href={`/api/v1/reports/export?resource=${module.resource}`}
+              rel="noreferrer"
+              target="_blank"
+            >
+              Export Excel
+            </a>
+            {module.slug === "advance-bookings" ? (
+              <span className="rounded-full border border-line px-4 py-3 text-xs font-semibold uppercase tracking-[0.24em] text-muted">
+                Auto PDF + message logging enabled
+              </span>
+            ) : null}
+          </div>
+        ) : null}
+      </Card>
+
+      {module.summaries.length ? (
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {module.summaries.map((summary) => (
+            <StatCard
+              key={summary.label}
+              label={summary.label}
+              tone={summary.tone}
+              value={computeSummary(summary, rows)}
+            />
+          ))}
+        </div>
+      ) : null}
+
+      <div className="space-y-4">
+        <Card>
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted">
+                {editingId ? "Edit record" : "New record"}
+              </p>
+              <h3 className="mt-2 text-2xl font-semibold text-ink">
+                {module.title}
+              </h3>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                className="flex items-center gap-2 rounded-full bg-black px-5 py-3 text-xs font-semibold uppercase tracking-[0.24em] text-white transition hover:brightness-105"
+                onClick={() => setIsRecordsModalOpen(true)}
+                type="button"
+              >
+                {loading ? (
+                   <svg className="animate-spin h-3.5 w-3.5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                   </svg>
+                ) : null}
+                View all records {!loading && `(${rows.length})`}
+              </button>
+              {editingId ? (
+                <button
+                  className="rounded-full border border-line px-4 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-muted"
+                  onClick={resetForm}
+                  type="button"
+                >
+                  Clear edit
+                </button>
+              ) : null}
+            </div>
+          </div>
+
+          <form className="space-y-4" onSubmit={handleSubmit}>
+            <div className="grid gap-4 md:grid-cols-2">
+              {module.fields.map((field) => (
+                <label
+                  key={field.key}
+                  className={field.type === "textarea" ? "md:col-span-2" : ""}
+                >
+                  <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.24em] text-muted">
+                    {field.label}
+                  </span>
+                  {field.type === "select" ? (
+                    <select
+                      className="w-full rounded-2xl border border-line bg-white px-4 py-3 outline-none transition focus:border-accent"
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          [field.key]: event.target.value,
+                        }))
+                      }
+                      required={field.required}
+                      value={String(form[field.key] ?? "")}
+                    >
+                      <option value="">Select</option>
+                      {field.options?.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  ) : field.type === "textarea" ? (
+                    <textarea
+                      className="min-h-28 w-full rounded-2xl border border-line bg-white px-4 py-3 outline-none transition focus:border-accent"
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          [field.key]: event.target.value,
+                        }))
+                      }
+                      placeholder={field.placeholder}
+                      required={field.required}
+                      value={String(form[field.key] ?? "")}
+                    />
+                  ) : field.type === "checkbox" ? (
+                    <div className="flex h-[52px] items-center rounded-2xl border border-line bg-white px-4">
+                      <input
+                        checked={Boolean(form[field.key])}
+                        onChange={(event) =>
+                          setForm((current) => ({
+                            ...current,
+                            [field.key]: event.target.checked,
+                          }))
+                        }
+                        type="checkbox"
+                      />
+                    </div>
+                  ) : (field.type === "image" || field.type === "file") ? (
+                    <div className="relative w-full rounded-2xl border border-dashed border-gray-400 bg-gray-50/50 hover:bg-gray-50 transition p-4">
+                      <div className="flex flex-col items-center justify-center space-y-2 text-center h-full">
+                        {form[field.key] ? (
+                          <div className="relative h-16 w-32 overflow-hidden mx-auto bg-white rounded-md border border-line group">
+                            {field.type === "image" && String(form[field.key]).match(/\.(jpeg|jpg|gif|png|webp)$/i) ? (
+                              <img 
+                                src={String(form[field.key])} 
+                                alt="preview" 
+                                className="w-full h-full object-contain" 
+                              />
+                            ) : (
+                              <div className="flex w-full h-full items-center justify-center text-xs font-semibold text-muted break-all px-2 text-center">
+                                File uploaded
+                              </div>
+                            )}
+                            <button
+                              type="button"
+                              className="absolute inset-0 bg-black/50 text-white opacity-0 transition-opacity group-hover:opacity-100 flex items-center justify-center text-xs font-bold"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                setForm(current => ({ ...current, [field.key]: "" }));
+                              }}
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="text-sm text-gray-500">
+                            {uploadingField === field.key ? (
+                              <span className="animate-pulse block mt-2">Uploading...</span>
+                            ) : (
+                              <>
+                                <span className="font-semibold text-accent block mb-1">Click or Drag & Drop</span>
+                                <span className="text-[10px] text-muted uppercase tracking-wider">Upload {field.label}</span>
+                              </>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                        onChange={(e) => {
+                          if (e.target.files && e.target.files[0]) {
+                            handleFileUpload(e.target.files[0], field.key);
+                          }
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    <input
+                      className="w-full rounded-2xl border border-line bg-white px-4 py-3 outline-none transition focus:border-accent"
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          [field.key]:
+                            field.type === "number"
+                              ? event.target.value
+                              : event.target.value,
+                        }))
+                      }
+                      placeholder={field.placeholder}
+                      required={field.required}
+                      step={field.step}
+                      type={field.type}
+                      value={String(form[field.key] ?? "")}
+                    />
+                  )}
+                  {field.hint ? (
+                    <span className="mt-2 block text-xs text-muted">{field.hint}</span>
+                  ) : null}
+                </label>
+              ))}
+            </div>
+
+            {error ? (
+              <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+                {error}
+              </div>
+            ) : null}
+
+            <div className="flex flex-wrap gap-3">
+              <button
+                className="rounded-full bg-accent px-5 py-3 text-xs font-semibold uppercase tracking-[0.24em] text-white transition hover:brightness-105 disabled:opacity-70"
+                disabled={saving}
+                type="submit"
+              >
+                {saving ? "Saving..." : editingId ? "Update record" : "Create record"}
+              </button>
+              <button
+                className="rounded-full border border-line px-5 py-3 text-xs font-semibold uppercase tracking-[0.24em] text-muted"
+                onClick={resetForm}
+                type="button"
+              >
+                Reset
+              </button>
+            </div>
+          </form>
+        </Card>
+      </div>
+
+      {isRecordsModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm transition-opacity animate-in fade-in duration-200">
+          <div className="relative flex max-h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-[32px] bg-white shadow-2xl ring-1 ring-black/5 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between border-b border-line bg-app/50 p-6 backdrop-blur-md">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted">
+                  Live records
+                </p>
+                <h3 className="mt-1 flex items-center gap-3 text-2xl font-semibold text-ink">
+                  {loading ? (
+                    <span className="flex items-center gap-2 text-muted text-base">
+                      <svg className="animate-spin h-5 w-5 text-accent" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Loading records...
+                    </span>
+                  ) : (
+                    `${rows.length} ${module.title}`
+                  )}
+                </h3>
+              </div>
+              <button
+                className="rounded-full bg-black px-6 py-3 text-xs font-semibold uppercase tracking-[0.24em] text-white transition hover:bg-zinc-800"
+                onClick={() => setIsRecordsModalOpen(false)}
+              >
+                Close Window
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-auto bg-white/80 p-6 pb-12">
+              {!rows.length && !loading ? (
+                <div className="rounded-[24px] border border-dashed border-line p-10 text-center text-sm text-muted">
+                  {module.emptyState}
+                </div>
+              ) : (
+                <DataTable
+                  columns={module.columns}
+                  getExtraAction={(row) => {
+                    if (module.slug === "advance-bookings") {
+                      return (
+                        <a
+                          className="rounded-full border border-line px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-ink"
+                          href={`/api/v1/advance-bookings/${row.id}/pdf`}
+                          rel="noreferrer"
+                          target="_blank"
+                        >
+                          PDF
+                        </a>
+                      );
+                    }
+
+                    if (module.slug === "advance-agreements") {
+                      return (
+                        <a
+                          className="rounded-full border border-line px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-ink"
+                          href={`/api/v1/advance-agreements/${row.id}/pdf`}
+                          rel="noreferrer"
+                          target="_blank"
+                        >
+                          PDF
+                        </a>
+                      );
+                    }
+
+                    return null;
+                  }}
+                  onDelete={(row) => {
+                    handleDelete(row);
+                  }}
+                  onEdit={(row) => {
+                    handleEdit(row);
+                    setIsRecordsModalOpen(false); // Close modal when editing
+                  }}
+                  rows={rows}
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

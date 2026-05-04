@@ -1,0 +1,17 @@
+name: propertysuite_mobile
+description: PropertySuite Android client for Samarth Developers Pro Pvt. Ltd.
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  google_fonts: ^6.2.1
+  http: ^1.2.2
+  shared_preferences: ^2.2.3
+
+flutter:
+  uses-material-design: true

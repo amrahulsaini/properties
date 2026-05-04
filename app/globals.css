@@ -1,26 +1,136 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --app: #fffaf5;
+  --surface: rgba(255, 255, 255, 0.82);
+  --surface-strong: #ffffff;
+  --ink: #111111;
+  --muted: #5c5246;
+  --line: rgba(17, 17, 17, 0.1);
+  --line-strong: rgba(17, 17, 17, 0.16);
+  --accent: #f26a1b;
+  --accent-soft: rgba(242, 106, 27, 0.12);
+  --success: #1f7a45;
+  --warning: #c66a00;
+  --shadow: 0 24px 70px rgba(17, 17, 17, 0.08);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-app: var(--app);
+  --color-surface: var(--surface);
+  --color-surface-strong: var(--surface-strong);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --font-sans: var(--font-sora);
+  --font-mono: var(--font-mono);
+  --font-display: var(--font-devanagari);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  font-size: 14px; /* Reduced global font size */
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background:
+    radial-gradient(circle at top left, rgba(242, 106, 27, 0.12), transparent 28%),
+    radial-gradient(circle at top right, rgba(17, 17, 17, 0.04), transparent 22%),
+    linear-gradient(180deg, #fffdf9 0%, #fff8ef 45%, #fffaf5 100%);
+  color: var(--ink);
+  font-family: var(--font-sora), sans-serif;
+  min-height: 100vh;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button.bg-black,
+button[class*="bg-black"],
+.bg-black button,
+.btn-black,
+a.bg-black,
+.bg-black {
+  color: #fff !important;
+  font-weight: bold !important;
+}
+button.bg-black:disabled,
+button[class*="bg-black"]:disabled,
+.bg-black button:disabled,
+.btn-black:disabled,
+a.bg-black:disabled {
+  color: #fff !important;
+  opacity: 0.6 !important;
+  font-weight: bold !important;
+}
+
+::selection {
+  background: rgba(242, 106, 27, 0.2);
+}
+
+.glass {
+  background: var(--surface);
+  backdrop-filter: blur(18px);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+}
+
+.section-grid {
+  background-image:
+    linear-gradient(rgba(17, 17, 17, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(17, 17, 17, 0.04) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.display-font {
+  font-family: var(--font-devanagari), var(--font-sora), sans-serif;
+}
+
+.surface-border {
+  border: 1px solid var(--line);
+}
+
+.surface-border-strong {
+  border: 1px solid var(--line-strong);
+}
+
+.shadow-soft {
+  box-shadow: var(--shadow);
+}
+
+/* Subtle, barely-noticeable scrollbar */
+.subtle-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.subtle-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.subtle-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+}
+.subtle-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+.subtle-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.08) transparent;
 }
