@@ -145,8 +145,8 @@ export function DocumentsWorkspace() {
             >
               <option value="" disabled>-- Choose a folder --</option>
               {folders.map((folder) => (
-                <option key={folder.id} value={String(folder.id)}>
-                  {folder.client_name} (ID: {folder.id})
+                <option key={String(folder.id)} value={String(folder.id)}>
+                  {String(folder.client_name)} (ID: {String(folder.id)})
                 </option>
               ))}
             </select>
