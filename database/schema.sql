@@ -339,7 +339,6 @@ CREATE TABLE IF NOT EXISTS finance_entries (
   PRIMARY KEY (id),
   KEY idx_finance_project (project_id),
   KEY idx_finance_type (entry_type),
-  CONSTRAINT fk_finance_project FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL,
   CONSTRAINT fk_finance_creator FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

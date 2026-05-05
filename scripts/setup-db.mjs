@@ -35,6 +35,8 @@ try {
   const schema = await readFile(schemaPath, "utf8");
   await connection.query(schema);
 
+  await connection.execute("ALTER TABLE finance_entries DROP FOREIGN KEY fk_finance_project").catch(() => {});
+
   const passwordHash = await bcrypt.hash(env.adminPassword, 12);
 
   await connection.execute(
