@@ -68,7 +68,7 @@ export const moduleCatalog: ModuleConfig[] = [
     resource: "projects",
     fields: [
       { key: "name", label: "Project name", type: "text", required: true },
-      { key: "code", label: "Project code", type: "text" },
+      { key: "code", label: "Project code", type: "text", required: true },
       {
         key: "type",
         label: "Type",
@@ -109,7 +109,7 @@ export const moduleCatalog: ModuleConfig[] = [
     icon: "MapPinned",
     resource: "plots",
     fields: [
-      { key: "project_id", label: "Project ID", type: "number", step: "1" },
+      { key: "project_id", label: "Project Info", type: "project_select", required: true },
       { key: "village", label: "Village", type: "text", required: true },
       { key: "survey_number", label: "Survey number", type: "text", required: true },
       { key: "area_sqft", label: "Area (sq.ft.)", type: "number", step: "0.01", required: true },
@@ -161,7 +161,7 @@ export const moduleCatalog: ModuleConfig[] = [
           { label: "Purchase", value: "purchase" },
         ],
       },
-      { key: "project_id", label: "Project ID", type: "number", step: "1" },
+      { key: "project_id", label: "Project Info", type: "project_select", required: true },
       { key: "plot_id", label: "Plot ID", type: "number", step: "1" },
       { key: "counterparty_name", label: "Buyer / Seller name", type: "text", required: true },
       { key: "counterparty_phone", label: "Phone", type: "tel" },
@@ -248,7 +248,7 @@ export const moduleCatalog: ModuleConfig[] = [
     slug: "advance-bookings",
     section: "Sales",
     title: "Advance Booking Memo",
-    subtitle: "Isarat receipts with automatic remaining balance, PDF, and WhatsApp or email follow-up.",
+    subtitle: "",
     badge: "Client critical",
     accent: "bg-accent text-white",
     icon: "ReceiptText",
@@ -258,7 +258,7 @@ export const moduleCatalog: ModuleConfig[] = [
       { key: "customer_phone", label: "Mobile", type: "tel" },
       { key: "customer_email", label: "Email", type: "email" },
       { key: "plot_id", label: "Plot ID", type: "number", step: "1" },
-      { key: "project_id", label: "Project ID", type: "number", step: "1" },
+      { key: "project_id", label: "Project Info", type: "project_select", required: true },
       { key: "village", label: "Village", type: "text", required: true },
       { key: "survey_number", label: "Survey number", type: "text", required: true },
       { key: "area_sqft", label: "Area (sq.ft.)", type: "number", step: "0.01" },
@@ -300,7 +300,7 @@ export const moduleCatalog: ModuleConfig[] = [
       { key: "owner_phone", label: "Phone", type: "tel" },
       { key: "owner_email", label: "Email", type: "email" },
       { key: "plot_id", label: "Plot ID", type: "number", step: "1" },
-      { key: "project_id", label: "Project ID", type: "number", step: "1" },
+      { key: "project_id", label: "Project Info", type: "project_select", required: true },
       { key: "village", label: "Village", type: "text", required: true },
       { key: "survey_number", label: "Survey number", type: "text", required: true },
       { key: "area_sqft", label: "Area (sq.ft.)", type: "number", step: "0.01" },
@@ -595,7 +595,7 @@ export const moduleCatalog: ModuleConfig[] = [
     icon: "BadgeIndianRupee",
     resource: "finance-entries",
     fields: [
-      { key: "project_id", label: "Project ID", type: "number", step: "1" },
+      { key: "project_id", label: "Project Info", type: "project_select", required: true },
       { key: "category", label: "Category", type: "text", required: true },
       {
         key: "entry_type",
@@ -752,16 +752,13 @@ export const moduleCatalog: ModuleConfig[] = [
           { label: "Investor", value: "investor" },
         ],
       },
-      { key: "project_id", label: "Project ID", type: "number", step: "1" },
-      { key: "aadhar_url", label: "Aadhar Card", type: "file" },
-      { key: "pan_url", label: "PAN Card", type: "file" },
-      { key: "agreement_url", label: "Agreement / Contract", type: "file" },
+      { key: "project_id", label: "Project Info", type: "project_select", required: true },
       { key: "notes", label: "Notes", type: "textarea" },
     ],
     columns: [
       { key: "client_name", label: "Client" },
       { key: "client_type", label: "Type", type: "badge" },
-      { key: "project_id", label: "Project ID", type: "number" },
+      { key: "project_id", label: "Project Info" },
       { key: "created_at", label: "Created", type: "date" },
     ],
     summaries: [
@@ -801,3 +798,5 @@ export const protectedPaths: Array<ModuleSlug | "dashboard"> = [
   "dashboard",
   ...moduleCatalog.map((module) => module.slug),
 ];
+
+

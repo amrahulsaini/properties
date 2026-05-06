@@ -3,6 +3,19 @@ import { createAdvanceBookingPdf } from "@/lib/pdf";
 import { getResourceById, ResourceError } from "@/lib/resources";
 import { handleRouteError, requireApiSession } from "@/lib/api";
 
+function resolveAssetUrl(request: Request, value: unknown) {
+  const raw = String(value ?? "").trim();
+  if (!raw) {
+    return "";
+  }
+
+  try {
+    return new URL(raw).toString();
+  } catch {
+    return new URL(raw, request.url).toString();
+  }
+}
+
 export async function GET(
   request: Request,
   context: { params: Promise<{ id: string }> },
@@ -30,9 +43,9 @@ export async function GET(
       eventAt: String(booking.payment_at ?? new Date().toISOString()),
       memoNumber: String(booking.memo_number ?? ""),
       gstNumber: String(booking.gst_number ?? ""),
-      customerSignatureUrl: String(booking.customer_signature_url ?? ""),
-      companySignatureUrl: String(booking.company_signature_url ?? ""),
-      partyPhotoUrl: String(booking.customer_photo_url ?? booking.customer_photo ?? ""),
+      customerSignatureUrl: resolveAssetUrl(request, booking.customer_signature_url),
+      companySignatureUrl: resolveAssetUrl(request, booking.company_signature_url),
+      partyPhotoUrl: resolveAssetUrl(request, booking.customer_photo_url ?? booking.customer_photo),
     });
 
     return new NextResponse(Buffer.from(pdf), {

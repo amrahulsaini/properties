@@ -1,5 +1,11 @@
-export function formatCurrency(value: unknown) {
+export function formatCurrency(value: unknown, forPdf = false) {
   const amount = Number(value ?? 0);
+
+  if (forPdf) {
+    return "Rs. " + new Intl.NumberFormat("en-IN", {
+      maximumFractionDigits: 0,
+    }).format(Number.isFinite(amount) ? amount : 0);
+  }
 
   return new Intl.NumberFormat("en-IN", {
     style: "currency",

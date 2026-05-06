@@ -35,7 +35,7 @@ const permissionMatrix: Record<Role, Partial<Record<ResourceName, PermissionActi
   accountant: {
     projects: ["read"],
     plots: ["read"],
-    transactions: ["read", "write"],
+    transactions: ["read", "write", "delete"],
     "advance-bookings": ["read", "write"],
     "advance-agreements": ["read", "write"],
     agents: ["read"],
@@ -53,7 +53,7 @@ const permissionMatrix: Record<Role, Partial<Record<ResourceName, PermissionActi
   agent: {
     projects: ["read"],
     plots: ["read", "write"],
-    transactions: ["read", "write"],
+    transactions: ["read", "write", "delete"],
     "advance-bookings": ["read", "write"],
     "advance-agreements": ["read"],
     agents: ["read"],

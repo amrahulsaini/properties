@@ -8,79 +8,9 @@ import { Notice } from "@/components/ui/notice";
 import { StatCard } from "@/components/ui/stat-card";
 import { formatCurrency, formatNumber } from "@/lib/format";
 import type { GenericRecord, ModuleConfig, ModuleField } from "@/lib/types";
-import { FileText, MessageCircleMore } from "lucide-react";
 
 interface ResourceWorkspaceProps {
   module: ModuleConfig;
-}
-
-type ProjectOption = {
-  id: number;
-  name?: string | null;
-  code?: string | null;
-};
-
-function ProjectSelectField({
-  value,
-  onChange,
-  required,
-}: {
-  value: string | number | boolean;
-  onChange: (value: string) => void;
-  required?: boolean;
-}) {
-  const [projects, setProjects] = useState<ProjectOption[]>([]);
-  const [loadingProjects, setLoadingProjects] = useState(true);
-
-  useEffect(() => {
-    let active = true;
-
-    async function loadProjects() {
-      try {
-        const response = await fetch("/api/v1/projects?limit=500");
-        const payload = await response.json();
-
-        if (!response.ok) {
-          throw new Error(payload.error ?? "Failed to load projects.");
-        }
-
-        if (active) {
-          setProjects(payload.data ?? []);
-        }
-      } catch {
-        if (active) {
-          setProjects([]);
-        }
-      } finally {
-        if (active) {
-          setLoadingProjects(false);
-        }
-      }
-    }
-
-    void loadProjects();
-
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  return (
-    <select
-      className="w-full rounded-2xl border border-line bg-white px-4 py-3 outline-none transition focus:border-accent"
-      onChange={(event) => onChange(event.target.value)}
-      required={required}
-      value={String(value ?? "")}
-    >
-      <option value="">{loadingProjects ? "Loading projects..." : "Select project"}</option>
-      {projects.map((project) => (
-        <option key={project.id} value={project.id}>
-          {project.code || `Project ${project.id}`}
-          {project.name ? ` - ${project.name}` : ""}
-        </option>
-      ))}
-    </select>
-  );
 }
 
 function createInitialState(fields: ModuleField[]) {
@@ -120,10 +50,6 @@ function toPayload(fields: ModuleField[], form: Record<string, string | number |
       }
 
       if (field.type === "number") {
-        return [field.key, value === "" ? null : Number(value)];
-      }
-
-      if (field.type === "project_select") {
         return [field.key, value === "" ? null : Number(value)];
       }
 
@@ -167,7 +93,6 @@ export function ResourceWorkspace({ module }: ResourceWorkspaceProps) {
   const [isRecordsModalOpen, setIsRecordsModalOpen] = useState(false);
   const [uploadingField, setUploadingField] = useState<string | null>(null);
   const [deletingRow, setDeletingRow] = useState<GenericRecord | null>(null);
-  const [projectCodeStatus, setProjectCodeStatus] = useState<"idle" | "checking" | "available" | "taken">("idle");
 
   async function loadRows() {
     if (!module.resource) {
@@ -298,7 +223,6 @@ export function ResourceWorkspace({ module }: ResourceWorkspaceProps) {
   function resetForm() {
     setEditingId(null);
     setForm(createInitialState(module.fields));
-    setProjectCodeStatus("idle");
   }
 
   function handleEdit(row: GenericRecord) {
@@ -310,40 +234,6 @@ export function ResourceWorkspace({ module }: ResourceWorkspaceProps) {
 
     setEditingId(Number(row.id));
     setForm(next);
-    setProjectCodeStatus("idle");
-  }
-
-  async function checkProjectCodeAvailability(nextCode: string) {
-    if (module.slug !== "projects") {
-      return;
-    }
-
-    const code = nextCode.trim();
-    if (!code) {
-      setProjectCodeStatus("idle");
-      return;
-    }
-
-    setProjectCodeStatus("checking");
-
-    try {
-      const response = await fetch("/api/v1/projects?limit=200");
-      const payload = await response.json();
-
-      if (!response.ok) {
-        throw new Error(payload.error ?? "Failed to validate project code.");
-      }
-
-      const exists = (payload.data ?? []).some((project: GenericRecord) => {
-        const projectCode = String(project.code ?? "").trim().toLowerCase();
-        const projectId = Number(project.id ?? 0);
-        return projectCode === code.toLowerCase() && projectId !== editingId;
-      });
-
-      setProjectCodeStatus(exists ? "taken" : "available");
-    } catch {
-      setProjectCodeStatus("idle");
-    }
   }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -438,7 +328,7 @@ export function ResourceWorkspace({ module }: ResourceWorkspaceProps) {
                 className={`rounded-full border border-line px-5 py-3 text-xs font-semibold uppercase tracking-[0.24em] text-muted ${
                   !rows?.length ? "opacity-60 pointer-events-none" : ""
                 }`}
-                href={rows?.length ? `/api/v1/${module.resource}/export` : "#"}
+                href={rows?.[0]?.id ? `/api/v1/${module.resource}/${rows?.[0]?.id}/pdf` : "#"}
                 rel="noreferrer"
                 target="_blank"
               >
@@ -510,18 +400,7 @@ export function ResourceWorkspace({ module }: ResourceWorkspaceProps) {
                     {field.label}
                     {field.required ? <span className="ml-1 text-red-500">*</span> : null}
                   </span>
-                  {field.type === "project_select" ? (
-                    <ProjectSelectField
-                      onChange={(nextValue) =>
-                        setForm((current) => ({
-                          ...current,
-                          [field.key]: nextValue,
-                        }))
-                      }
-                      required={field.required}
-                      value={form[field.key]}
-                    />
-                  ) : field.type === "select" ? (
+                  {field.type === "select" ? (
                     <select
                       className="w-full rounded-2xl border border-line bg-white px-4 py-3 outline-none transition focus:border-accent"
                       onChange={(event) =>
@@ -566,29 +445,29 @@ export function ResourceWorkspace({ module }: ResourceWorkspaceProps) {
                         type="checkbox"
                       />
                     </div>
-                  ) : field.type === "image" || field.type === "file" ? (
-                    <div className="relative w-full rounded-2xl border border-dashed border-gray-400 bg-gray-50/50 transition hover:bg-gray-50 p-4">
-                      <div className="flex h-full flex-col items-center justify-center space-y-2 text-center">
+                  ) : (field.type === "image" || field.type === "file") ? (
+                    <div className="relative w-full rounded-2xl border border-dashed border-gray-400 bg-gray-50/50 hover:bg-gray-50 transition p-4">
+                      <div className="flex flex-col items-center justify-center space-y-2 text-center h-full">
                         {form[field.key] ? (
-                          <div className="group relative mx-auto h-16 w-32 overflow-hidden rounded-md border border-line bg-white">
+                          <div className="relative h-16 w-32 overflow-hidden mx-auto bg-white rounded-md border border-line group">
                             {field.type === "image" && String(form[field.key]).match(/\.(jpeg|jpg|gif|png|webp)$/i) ? (
-                              <img
-                                alt="preview"
-                                className="h-full w-full object-contain"
-                                src={String(form[field.key])}
+                              <img 
+                                src={String(form[field.key])} 
+                                alt="preview" 
+                                className="w-full h-full object-contain" 
                               />
                             ) : (
-                              <div className="flex h-full w-full items-center justify-center break-all px-2 text-center text-xs font-semibold text-muted">
+                              <div className="flex w-full h-full items-center justify-center text-xs font-semibold text-muted break-all px-2 text-center">
                                 File uploaded
                               </div>
                             )}
-                            <button
-                              className="absolute inset-0 flex items-center justify-center bg-black/50 text-xs font-bold text-white opacity-0 transition-opacity group-hover:opacity-100"
-                              onClick={(event) => {
-                                event.preventDefault();
-                                setForm((current) => ({ ...current, [field.key]: "" }));
-                              }}
+                            <button style={{cursor:'pointer'}} 
                               type="button"
+                              className="absolute inset-0 bg-black/50 text-white opacity-0 transition-opacity group-hover:opacity-100 flex items-center justify-center text-xs font-bold"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                setForm(current => ({ ...current, [field.key]: "" }));
+                              }}
                             >
                               Remove
                             </button>
@@ -596,17 +475,18 @@ export function ResourceWorkspace({ module }: ResourceWorkspaceProps) {
                         ) : (
                           <div className="text-sm text-gray-500">
                             {uploadingField === field.key ? (
-                              <span className="mt-2 block animate-pulse">Uploading...</span>
+                              <span className="animate-pulse block mt-2">Uploading...</span>
                             ) : (
                               <>
-                                <span className="mb-1 block font-semibold text-accent">Click or Drag & Drop</span>
-                                <span className="text-[10px] uppercase tracking-wider text-muted">Upload {field.label}</span>
+                                <span className="font-semibold text-accent block mb-1">Click or Drag & Drop</span>
+                                <span className="text-[10px] text-muted uppercase tracking-wider">Upload {field.label}</span>
                               </>
                             )}
                           </div>
                         )}
                       </div>
                       <input
+                        type="file"
                         accept="image/*"
                         className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
                         onChange={(e) => {
@@ -614,54 +494,26 @@ export function ResourceWorkspace({ module }: ResourceWorkspaceProps) {
                             handleFileUpload(e.target.files[0], field.key);
                           }
                         }}
-                        type="file"
                       />
                     </div>
                   ) : (
-                    <div className="space-y-2">
-                      <input
-                        className="w-full rounded-2xl border border-line bg-white px-4 py-3 outline-none transition focus:border-accent"
-                        onBlur={
-                          module.slug === "projects" && field.key === "code"
-                            ? (event) => {
-                                void checkProjectCodeAvailability(event.target.value);
-                              }
-                            : undefined
-                        }
-                        onChange={(event) => {
-                          setForm((current) => ({
-                            ...current,
-                            [field.key]: event.target.value,
-                          }));
-
-                          if (module.slug === "projects" && field.key === "code") {
-                            setProjectCodeStatus("idle");
-                          }
-                        }}
-                        placeholder={field.placeholder}
-                        required={field.required}
-                        step={field.step}
-                        type={field.type}
-                        value={String(form[field.key] ?? "")}
-                      />
-                      {module.slug === "projects" && field.key === "code" ? (
-                        <p
-                          className={`text-xs font-medium ${
-                            projectCodeStatus === "taken"
-                              ? "text-rose-600"
-                              : projectCodeStatus === "available"
-                                ? "text-emerald-600"
-                                : "text-muted"
-                          }`}
-                        >
-                          {projectCodeStatus === "taken"
-                            ? "This project code already exists."
-                            : projectCodeStatus === "available"
-                              ? "Code is available."
-                              : " "}
-                        </p>
-                      ) : null}
-                    </div>
+                    <input
+                      className="w-full rounded-2xl border border-line bg-white px-4 py-3 outline-none transition focus:border-accent"
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          [field.key]:
+                            field.type === "number"
+                              ? event.target.value
+                              : event.target.value,
+                        }))
+                      }
+                      placeholder={field.placeholder}
+                      required={field.required}
+                      step={field.step}
+                      type={field.type}
+                      value={String(form[field.key] ?? "")}
+                    />
                   )}
                   {field.hint ? (
                     <span className="mt-2 block text-xs text-muted">{field.hint}</span>
@@ -724,6 +576,16 @@ export function ResourceWorkspace({ module }: ResourceWorkspaceProps) {
               >
                 Close Window
               </button>
+              {(module.slug === "advance-bookings" || module.slug === "advance-agreements") ? (
+                <a
+                  className="mr-3 rounded-full border border-line px-5 py-3 text-xs font-semibold uppercase tracking-[0.24em] text-muted"
+                  href={`/api/v1/${module.resource}/export`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Export Bill PDF
+                </a>
+              ) : null}
             </div>
             
             <div className="flex-1 overflow-auto bg-white/80 p-6 pb-12">
@@ -735,49 +597,29 @@ export function ResourceWorkspace({ module }: ResourceWorkspaceProps) {
                 <DataTable
                   columns={module.columns}
                   getExtraAction={(row) => {
-                    if (module.slug === "advance-bookings" || module.slug === "advance-agreements") {
-                      const pdfUrl =
-                        module.slug === "advance-bookings"
-                          ? `/api/v1/advance-bookings/${row.id}/pdf`
-                          : `/api/v1/advance-agreements/${row.id}/pdf`;
-                      const phone = String(
-                        module.slug === "advance-bookings"
-                          ? row.customer_phone ?? ""
-                          : row.owner_phone ?? row.customer_phone ?? "",
-                      ).replace(/\D/g, "");
-                      const origin = typeof window !== "undefined" 
-                        ? window.location.origin 
-                        : (typeof process !== "undefined" && process.env.NEXT_PUBLIC_APP_URL 
-                          ? process.env.NEXT_PUBLIC_APP_URL 
-                          : "https://yourdomain.com");
-                      const fullPdfUrl = `${origin}${pdfUrl}`;
-                      const whatsappMessage = `Your ${module.slug === "advance-bookings" ? "Advance Booking" : "Advance Agreement"} PDF:\n${fullPdfUrl}`;
-
+                    if (module.slug === "advance-bookings") {
                       return (
-                        <div className="flex flex-wrap items-center gap-2">
-                          <a
-                            className="inline-flex items-center gap-2 rounded-full border border-line px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-ink transition hover:border-accent hover:bg-accent/10 hover:text-accent"
-                            href={fullPdfUrl}
-                            rel="noreferrer"
-                            target="_blank"
-                            title="Open PDF"
-                          >
-                            <FileText size={15} />
-                            PDF
-                          </a>
-                          {phone ? (
-                            <a
-                              className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700 transition hover:bg-emerald-100"
-                              href={`https://wa.me/${phone}?text=${encodeURIComponent(whatsappMessage)}`}
-                              rel="noreferrer"
-                              target="_blank"
-                              title="Send on WhatsApp"
-                            >
-                              <MessageCircleMore size={15} />
-                              WhatsApp
-                            </a>
-                          ) : null}
-                        </div>
+                        <a
+                          className="rounded-full border border-line px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-ink"
+                          href={`/api/v1/advance-bookings/${row.id}/pdf`}
+                          rel="noreferrer"
+                          target="_blank"
+                        >
+                          PDF
+                        </a>
+                      );
+                    }
+
+                    if (module.slug === "advance-agreements") {
+                      return (
+                        <a
+                          className="rounded-full border border-line px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-ink"
+                          href={`/api/v1/advance-agreements/${row.id}/pdf`}
+                          rel="noreferrer"
+                          target="_blank"
+                        >
+                          PDF
+                        </a>
                       );
                     }
 
@@ -825,3 +667,4 @@ export function ResourceWorkspace({ module }: ResourceWorkspaceProps) {
     </div>
   );
 }
+

@@ -4,6 +4,19 @@ import { defaultBranding } from "@/lib/brand";
 import { getResourceById, ResourceError } from "@/lib/resources";
 import { handleRouteError, requireApiSession } from "@/lib/api";
 
+function resolveAssetUrl(request: Request, value: unknown) {
+  const raw = String(value ?? "").trim();
+  if (!raw) {
+    return "";
+  }
+
+  try {
+    return new URL(raw).toString();
+  } catch {
+    return new URL(raw, request.url).toString();
+  }
+}
+
 export async function GET(
   request: Request,
   context: { params: Promise<{ id: string }> },
@@ -31,9 +44,9 @@ export async function GET(
       eventAt: String(agreement.agreement_at ?? new Date().toISOString()),
       memoNumber: String(agreement.memo_number ?? ""),
       gstNumber: String(agreement.gst_number ?? defaultBranding.gstin ?? ""),
-      customerSignatureUrl: String(agreement.owner_signature_url ?? agreement.customer_signature_url ?? ""),
-      companySignatureUrl: String(agreement.company_signature_url ?? ""),
-      partyPhotoUrl: String(agreement.owner_photo_url ?? agreement.customer_photo_url ?? ""),
+      customerSignatureUrl: resolveAssetUrl(request, agreement.owner_signature_url ?? agreement.customer_signature_url),
+      companySignatureUrl: resolveAssetUrl(request, agreement.company_signature_url),
+      partyPhotoUrl: resolveAssetUrl(request, agreement.owner_photo_url ?? agreement.customer_photo_url),
       conditions: [agreement.conditions_text, agreement.inspection_rights]
         .filter(Boolean)
         .join(" | "),

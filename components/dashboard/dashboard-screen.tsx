@@ -109,7 +109,7 @@ export function DashboardScreen() {
         <StatCard
           label="Advance Bookings"
           value={String(data.totals.bookings)}
-          hint="Active isarat receipts"
+          
         />
       </div>
 
@@ -223,3 +223,4 @@ export function DashboardScreen() {
     </div>
   );
 }
+

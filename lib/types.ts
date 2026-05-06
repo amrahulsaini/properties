@@ -10,7 +10,7 @@ export type FieldType =
   | "textarea"
   | "date"
   | "datetime-local"
-  | "checkbox"
+  | "checkbox" | "project_select"
   | "image"
   | "file";
 
@@ -107,6 +107,7 @@ export interface ModuleSummary {
   prefix?: string;
   suffix?: string;
   tone?: SummaryTone;
+  filter?: Record<string, any>;
 }
 
 export interface ModuleConfig {
@@ -125,3 +126,4 @@ export interface ModuleConfig {
 }
 
 export type GenericRecord = Record<string, unknown> & { id?: number };
+

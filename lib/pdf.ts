@@ -23,102 +23,452 @@ interface PdfPayload {
   companySignatureUrl?: string | null;
 }
 
-async function createBaseDocument(payload: PdfPayload) {
-  const pdf = await PDFDocument.create();
-  const page = pdf.addPage([595, 842]);
-  const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
-  const regular = await pdf.embedFont(StandardFonts.Helvetica);
-  const accent = rgb(0.95, 0.42, 0.11);
-  let y = 790;
+const ACCENT_COLOR = rgb(0.95, 0.42, 0.11); // Orange accent
+const PRIMARY_TEXT = rgb(0.07, 0.07, 0.07); // Dark gray
+const SECONDARY_TEXT = rgb(0.35, 0.32, 0.28); // Medium gray
+const BORDER_COLOR = rgb(0.85, 0.85, 0.85); // Light gray border
+const HEADER_BG = rgb(0.98, 0.95, 0.90); // Warm light background
+const GRID_BG = rgb(0.99, 0.99, 0.99); // Very light background for grids
 
+const PAGE_WIDTH = 595;
+const PAGE_HEIGHT = 842;
+const MARGIN_LEFT = 35;
+const MARGIN_RIGHT = 35;
+const CONTENT_WIDTH = PAGE_WIDTH - MARGIN_LEFT - MARGIN_RIGHT;
+const COL_WIDTH = (CONTENT_WIDTH - 10) / 2; // Two columns with gap
+
+async function drawSection(
+  page: any,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  bgColor: any = null,
+  borderColor: any = BORDER_COLOR,
+) {
+  if (bgColor) {
+    page.drawRectangle({
+      x,
+      y: y - height,
+      width,
+      height,
+      color: bgColor,
+    });
+  }
   page.drawRectangle({
-    x: 28,
-    y: 755,
-    width: 539,
-    height: 58,
-    color: rgb(1, 0.97, 0.94),
-    borderColor: accent,
+    x,
+    y: y - height,
+    width,
+    height,
+    borderColor,
     borderWidth: 1,
   });
+}
 
+async function createBaseDocument(payload: PdfPayload) {
+  const pdf = await PDFDocument.create();
+  const page = pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+  const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const regular = await pdf.embedFont(StandardFonts.Helvetica);
+  
+  let y = PAGE_HEIGHT - 35;
+
+  // ====== HEADER SECTION ======
+  const headerHeight = 70;
+  page.drawRectangle({
+    x: MARGIN_LEFT,
+    y: y - headerHeight,
+    width: CONTENT_WIDTH,
+    height: headerHeight,
+    color: HEADER_BG,
+    borderColor: ACCENT_COLOR,
+    borderWidth: 2,
+  });
+
+  // Company name in header
   page.drawText(defaultBranding.companyName, {
-    x: 42,
+    x: MARGIN_LEFT + 15,
+    y: y - 22,
+    size: 22,
+    font: bold,
+    color: ACCENT_COLOR,
+  });
+
+  // GSTIN and location
+  page.drawText(`GSTIN: ${defaultBranding.gstin}`, {
+    x: MARGIN_LEFT + 15,
+    y: y - 42,
+    size: 9,
+    font: regular,
+    color: SECONDARY_TEXT,
+  });
+
+  page.drawText(defaultBranding.location, {
+    x: MARGIN_LEFT + 15,
+    y: y - 55,
+    size: 9,
+    font: regular,
+    color: SECONDARY_TEXT,
+  });
+
+  y -= headerHeight + 20;
+
+  // ====== TITLE SECTION ======
+  page.drawText(payload.title.toUpperCase(), {
+    x: MARGIN_LEFT,
     y,
     size: 18,
     font: bold,
-    color: rgb(0.07, 0.07, 0.07),
+    color: ACCENT_COLOR,
   });
-  y -= 20;
 
-  page.drawText(
-    `GSTIN: ${defaultBranding.gstin} | ${defaultBranding.location}`,
-    {
-      x: 42,
-      y,
-      size: 10,
-      font: regular,
-      color: rgb(0.35, 0.32, 0.28),
-    },
-  );
+  // Horizontal line under title
+  page.drawLine({
+    start: { x: MARGIN_LEFT, y: y - 8 },
+    end: { x: PAGE_WIDTH - MARGIN_RIGHT, y: y - 8 },
+    thickness: 2,
+    color: ACCENT_COLOR,
+  });
 
-  y = 720;
+  y -= 35;
 
-  page.drawText(payload.title, {
-    x: 42,
+  // ====== PARTY INFORMATION SECTION ======
+  page.drawText("PARTY INFORMATION", {
+    x: MARGIN_LEFT,
     y,
-    size: 20,
+    size: 11,
     font: bold,
-    color: accent,
+    color: PRIMARY_TEXT,
   });
-  y -= 28;
+  y -= 18;
 
-  const lines = [
-    `Party: ${payload.partyName}`,
-    `Phone / Email: ${payload.partyPhone ?? "-"} | ${payload.partyEmail ?? "-"}`,
-    `Property: ${payload.village} - Survey No. ${payload.surveyNumber}, Area ${payload.area}`,
-    `Total Amount: ${formatCurrency(payload.totalAmount)}`,
-    `Paid Amount: ${formatCurrency(payload.paidAmount)}`,
-    `Remaining Amount: ${formatCurrency(payload.remainingAmount)}`,
-    `Payment Mode: ${payload.paymentMode}`,
-    `Date & Time: ${formatDateTime(payload.eventAt)}`,
-    `Memo No.: ${payload.memoNumber ?? "-"}`,
-    `GST No.: ${payload.gstNumber ?? defaultBranding.gstin}`,
-  ];
+  // Section border
+  page.drawRectangle({
+    x: MARGIN_LEFT,
+    y: y - 65,
+    width: CONTENT_WIDTH,
+    height: 65,
+    color: GRID_BG,
+    borderColor: BORDER_COLOR,
+    borderWidth: 1,
+  });
 
-  for (const line of lines) {
-    page.drawText(line, {
-      x: 42,
-      y,
-      size: 12,
-      font: regular,
-      color: rgb(0.07, 0.07, 0.07),
-    });
-    y -= 24;
-  }
+  // Left column - Party Name
+  page.drawText("PARTY NAME", {
+    x: MARGIN_LEFT + 10,
+    y: y - 10,
+    size: 8,
+    font: bold,
+    color: SECONDARY_TEXT,
+  });
+  page.drawText(payload.partyName || "—", {
+    x: MARGIN_LEFT + 10,
+    y: y - 28,
+    size: 12,
+    font: bold,
+    color: PRIMARY_TEXT,
+  });
 
+  // Right column - Phone
+  page.drawText("PHONE", {
+    x: MARGIN_LEFT + COL_WIDTH + 15,
+    y: y - 10,
+    size: 8,
+    font: bold,
+    color: SECONDARY_TEXT,
+  });
+  page.drawText(payload.partyPhone || "—", {
+    x: MARGIN_LEFT + COL_WIDTH + 15,
+    y: y - 28,
+    size: 12,
+    font: bold,
+    color: PRIMARY_TEXT,
+  });
+
+  // Email (spans full width below)
+  page.drawText("EMAIL", {
+    x: MARGIN_LEFT + 10,
+    y: y - 42,
+    size: 8,
+    font: bold,
+    color: SECONDARY_TEXT,
+  });
+  page.drawText(payload.partyEmail || "—", {
+    x: MARGIN_LEFT + 10,
+    y: y - 60,
+    size: 11,
+    font: regular,
+    color: PRIMARY_TEXT,
+  });
+
+  y -= 85;
+
+  // ====== PROPERTY DETAILS SECTION ======
+  page.drawText("PROPERTY DETAILS", {
+    x: MARGIN_LEFT,
+    y,
+    size: 11,
+    font: bold,
+    color: PRIMARY_TEXT,
+  });
+  y -= 18;
+
+  // Two-column grid for property details
+  const gridHeight = 75;
+  page.drawRectangle({
+    x: MARGIN_LEFT,
+    y: y - gridHeight,
+    width: CONTENT_WIDTH,
+    height: gridHeight,
+    color: GRID_BG,
+    borderColor: BORDER_COLOR,
+    borderWidth: 1,
+  });
+
+  // Left column - Village
+  page.drawText("VILLAGE", {
+    x: MARGIN_LEFT + 10,
+    y: y - 10,
+    size: 8,
+    font: bold,
+    color: SECONDARY_TEXT,
+  });
+  page.drawText(payload.village, {
+    x: MARGIN_LEFT + 10,
+    y: y - 28,
+    size: 12,
+    font: bold,
+    color: PRIMARY_TEXT,
+  });
+
+  // Right column - Survey Number
+  page.drawText("SURVEY NUMBER", {
+    x: MARGIN_LEFT + COL_WIDTH + 15,
+    y: y - 10,
+    size: 8,
+    font: bold,
+    color: SECONDARY_TEXT,
+  });
+  page.drawText(payload.surveyNumber, {
+    x: MARGIN_LEFT + COL_WIDTH + 15,
+    y: y - 28,
+    size: 12,
+    font: bold,
+    color: PRIMARY_TEXT,
+  });
+
+  // Area (second row left)
+  page.drawText("AREA", {
+    x: MARGIN_LEFT + 10,
+    y: y - 42,
+    size: 8,
+    font: bold,
+    color: SECONDARY_TEXT,
+  });
+  page.drawText(payload.area, {
+    x: MARGIN_LEFT + 10,
+    y: y - 60,
+    size: 12,
+    font: bold,
+    color: PRIMARY_TEXT,
+  });
+
+  y -= gridHeight + 20;
+
+  // ====== FINANCIAL DETAILS SECTION ======
+  page.drawText("FINANCIAL DETAILS", {
+    x: MARGIN_LEFT,
+    y,
+    size: 11,
+    font: bold,
+    color: PRIMARY_TEXT,
+  });
+  y -= 18;
+
+  const finHeight = 85;
+  page.drawRectangle({
+    x: MARGIN_LEFT,
+    y: y - finHeight,
+    width: CONTENT_WIDTH,
+    height: finHeight,
+    color: GRID_BG,
+    borderColor: BORDER_COLOR,
+    borderWidth: 1,
+  });
+
+  // Left column - Total Amount
+  page.drawText("TOTAL AMOUNT", {
+    x: MARGIN_LEFT + 10,
+    y: y - 10,
+    size: 8,
+    font: bold,
+    color: SECONDARY_TEXT,
+  });
+  page.drawText(formatCurrency(payload.totalAmount, true), {
+    x: MARGIN_LEFT + 10,
+    y: y - 28,
+    size: 13,
+    font: bold,
+    color: ACCENT_COLOR,
+  });
+
+  // Right column - Paid Amount
+  page.drawText("PAID AMOUNT", {
+    x: MARGIN_LEFT + COL_WIDTH + 15,
+    y: y - 10,
+    size: 8,
+    font: bold,
+    color: SECONDARY_TEXT,
+  });
+  page.drawText(formatCurrency(payload.paidAmount, true), {
+    x: MARGIN_LEFT + COL_WIDTH + 15,
+    y: y - 28,
+    size: 13,
+    font: bold,
+    color: rgb(0.0, 0.6, 0.0), // Green for paid
+  });
+
+  // Remaining Amount (second row left)
+  page.drawText("REMAINING AMOUNT", {
+    x: MARGIN_LEFT + 10,
+    y: y - 42,
+    size: 8,
+    font: bold,
+    color: SECONDARY_TEXT,
+  });
+  page.drawText(formatCurrency(payload.remainingAmount, true), {
+    x: MARGIN_LEFT + 10,
+    y: y - 60,
+    size: 13,
+    font: bold,
+    color: payload.remainingAmount > 0 ? rgb(0.8, 0.0, 0.0) : rgb(0.0, 0.6, 0.0),
+  });
+
+  y -= finHeight + 20;
+
+  // ====== TRANSACTION DETAILS SECTION ======
+  page.drawText("TRANSACTION DETAILS", {
+    x: MARGIN_LEFT,
+    y,
+    size: 11,
+    font: bold,
+    color: PRIMARY_TEXT,
+  });
+  y -= 18;
+
+  const transHeight = 75;
+  page.drawRectangle({
+    x: MARGIN_LEFT,
+    y: y - transHeight,
+    width: CONTENT_WIDTH,
+    height: transHeight,
+    color: GRID_BG,
+    borderColor: BORDER_COLOR,
+    borderWidth: 1,
+  });
+
+  // Left column - Payment Mode
+  page.drawText("PAYMENT MODE", {
+    x: MARGIN_LEFT + 10,
+    y: y - 10,
+    size: 8,
+    font: bold,
+    color: SECONDARY_TEXT,
+  });
+  page.drawText(payload.paymentMode, {
+    x: MARGIN_LEFT + 10,
+    y: y - 28,
+    size: 12,
+    font: bold,
+    color: PRIMARY_TEXT,
+  });
+
+  // Right column - Date & Time
+  page.drawText("DATE & TIME", {
+    x: MARGIN_LEFT + COL_WIDTH + 15,
+    y: y - 10,
+    size: 8,
+    font: bold,
+    color: SECONDARY_TEXT,
+  });
+  page.drawText(formatDateTime(payload.eventAt), {
+    x: MARGIN_LEFT + COL_WIDTH + 15,
+    y: y - 28,
+    size: 11,
+    font: regular,
+    color: PRIMARY_TEXT,
+  });
+
+  // Memo Number (second row left)
+  page.drawText("MEMO NUMBER", {
+    x: MARGIN_LEFT + 10,
+    y: y - 42,
+    size: 8,
+    font: bold,
+    color: SECONDARY_TEXT,
+  });
+  page.drawText(payload.memoNumber || "—", {
+    x: MARGIN_LEFT + 10,
+    y: y - 60,
+    size: 12,
+    font: bold,
+    color: PRIMARY_TEXT,
+  });
+
+  // GST Number (second row right)
+  page.drawText("GST NUMBER", {
+    x: MARGIN_LEFT + COL_WIDTH + 15,
+    y: y - 42,
+    size: 8,
+    font: bold,
+    color: SECONDARY_TEXT,
+  });
+  page.drawText(payload.gstNumber || defaultBranding.gstin, {
+    x: MARGIN_LEFT + COL_WIDTH + 15,
+    y: y - 60,
+    size: 11,
+    font: regular,
+    color: PRIMARY_TEXT,
+  });
+
+  y -= transHeight + 20;
+
+  // ====== CONDITIONS SECTION (if present) ======
   if (payload.conditions) {
-    page.drawText("Conditions", {
-      x: 42,
-      y: y - 8,
-      size: 13,
-      font: bold,
-      color: rgb(0.07, 0.07, 0.07),
-    });
-    y -= 34;
-
-    page.drawText(payload.conditions, {
-      x: 42,
+    page.drawText("CONDITIONS & TERMS", {
+      x: MARGIN_LEFT,
       y,
       size: 11,
-      lineHeight: 15,
-      maxWidth: 500,
-      font: regular,
-      color: rgb(0.35, 0.32, 0.28),
+      font: bold,
+      color: PRIMARY_TEXT,
     });
-    y -= 80;
+    y -= 18;
+
+    const conditionsHeight = 50;
+    page.drawRectangle({
+      x: MARGIN_LEFT,
+      y: y - conditionsHeight,
+      width: CONTENT_WIDTH,
+      height: conditionsHeight,
+      color: GRID_BG,
+      borderColor: BORDER_COLOR,
+      borderWidth: 1,
+    });
+
+    page.drawText(payload.conditions, {
+      x: MARGIN_LEFT + 10,
+      y: y - 12,
+      size: 10,
+      lineHeight: 13,
+      maxWidth: CONTENT_WIDTH - 20,
+      font: regular,
+      color: PRIMARY_TEXT,
+    });
+
+    y -= conditionsHeight + 20;
   }
 
-  // Attempt to embed the party photo at top-right if provided
+  // ====== PARTY PHOTO (top-right if available) ======
   if (payload.partyPhotoUrl) {
     try {
       const resp = await fetch(payload.partyPhotoUrl);
@@ -126,17 +476,30 @@ async function createBaseDocument(payload: PdfPayload) {
         const buf = await resp.arrayBuffer();
         const contentType = resp.headers.get("content-type") || "";
         let img: any = null;
-        if (contentType.includes("png") || String(payload.partyPhotoUrl).toLowerCase().endsWith(".png")) {
+        if (
+          contentType.includes("png") ||
+          String(payload.partyPhotoUrl).toLowerCase().endsWith(".png")
+        ) {
           img = await pdf.embedPng(buf);
         } else {
           img = await pdf.embedJpg(buf);
         }
 
+        const photoSize = 65;
+        page.drawRectangle({
+          x: PAGE_WIDTH - MARGIN_RIGHT - photoSize - 1,
+          y: PAGE_HEIGHT - 35 - 70 - 1,
+          width: photoSize,
+          height: photoSize,
+          borderColor: ACCENT_COLOR,
+          borderWidth: 1.5,
+        });
+
         page.drawImage(img, {
-          x: 480,
-          y: 740,
-          width: 70,
-          height: 70,
+          x: PAGE_WIDTH - MARGIN_RIGHT - photoSize,
+          y: PAGE_HEIGHT - 35 - 70,
+          width: photoSize,
+          height: photoSize,
         });
       }
     } catch (e) {
@@ -144,33 +507,73 @@ async function createBaseDocument(payload: PdfPayload) {
     }
   }
 
-  page.drawLine({
-    start: { x: 42, y: 110 },
-    end: { x: 250, y: 110 },
-    thickness: 1,
-    color: rgb(0.2, 0.2, 0.2),
-  });
-  page.drawLine({
-    start: { x: 340, y: 110 },
-    end: { x: 548, y: 110 },
-    thickness: 1,
-    color: rgb(0.2, 0.2, 0.2),
+  // ====== SIGNATURE SECTION ======
+  const sigY = 110;
+  const sigBoxHeight = 70;
+  const sigBoxWidth = (CONTENT_WIDTH - 15) / 2;
+
+  // Section label
+  page.drawText("AUTHORIZED SIGNATURES", {
+    x: MARGIN_LEFT,
+    y: sigY + 20,
+    size: 11,
+    font: bold,
+    color: PRIMARY_TEXT,
   });
 
-  page.drawText("Customer / Owner Signature", {
-    x: 42,
-    y: 94,
-    size: 10,
-    font: regular,
-  });
-  page.drawText("Company Signature", {
-    x: 340,
-    y: 94,
-    size: 10,
-    font: regular,
+  // Customer signature box
+  page.drawRectangle({
+    x: MARGIN_LEFT,
+    y: sigY - sigBoxHeight,
+    width: sigBoxWidth,
+    height: sigBoxHeight,
+    color: GRID_BG,
+    borderColor: BORDER_COLOR,
+    borderWidth: 1,
   });
 
-  // Embed signatures if available (draw above the signature lines)
+  page.drawLine({
+    start: { x: MARGIN_LEFT + 10, y: sigY - 50 },
+    end: { x: MARGIN_LEFT + sigBoxWidth - 10, y: sigY - 50 },
+    thickness: 1,
+    color: BORDER_COLOR,
+  });
+
+  page.drawText("Customer / Owner", {
+    x: MARGIN_LEFT + 10,
+    y: sigY - 60,
+    size: 9,
+    font: regular,
+    color: SECONDARY_TEXT,
+  });
+
+  // Company signature box
+  page.drawRectangle({
+    x: MARGIN_LEFT + sigBoxWidth + 15,
+    y: sigY - sigBoxHeight,
+    width: sigBoxWidth,
+    height: sigBoxHeight,
+    color: GRID_BG,
+    borderColor: BORDER_COLOR,
+    borderWidth: 1,
+  });
+
+  page.drawLine({
+    start: { x: MARGIN_LEFT + sigBoxWidth + 15 + 10, y: sigY - 50 },
+    end: { x: MARGIN_LEFT + sigBoxWidth + 15 + sigBoxWidth - 10, y: sigY - 50 },
+    thickness: 1,
+    color: BORDER_COLOR,
+  });
+
+  page.drawText("Company Authorized", {
+    x: MARGIN_LEFT + sigBoxWidth + 15 + 10,
+    y: sigY - 60,
+    size: 9,
+    font: regular,
+    color: SECONDARY_TEXT,
+  });
+
+  // Embed signatures if available
   if (payload.customerSignatureUrl) {
     try {
       const resp = await fetch(payload.customerSignatureUrl);
@@ -178,17 +581,20 @@ async function createBaseDocument(payload: PdfPayload) {
         const buf = await resp.arrayBuffer();
         const contentType = resp.headers.get("content-type") || "";
         let sigImg: any = null;
-        if (contentType.includes("png") || String(payload.customerSignatureUrl).toLowerCase().endsWith(".png")) {
+        if (
+          contentType.includes("png") ||
+          String(payload.customerSignatureUrl).toLowerCase().endsWith(".png")
+        ) {
           sigImg = await pdf.embedPng(buf);
         } else {
           sigImg = await pdf.embedJpg(buf);
         }
 
         page.drawImage(sigImg, {
-          x: 42,
-          y: 118,
-          width: 200,
-          height: 60,
+          x: MARGIN_LEFT + 10,
+          y: sigY - 48,
+          width: sigBoxWidth - 20,
+          height: 40,
         });
       }
     } catch (e) {
@@ -203,17 +609,20 @@ async function createBaseDocument(payload: PdfPayload) {
         const buf = await resp.arrayBuffer();
         const contentType = resp.headers.get("content-type") || "";
         let sigImg: any = null;
-        if (contentType.includes("png") || String(payload.companySignatureUrl).toLowerCase().endsWith(".png")) {
+        if (
+          contentType.includes("png") ||
+          String(payload.companySignatureUrl).toLowerCase().endsWith(".png")
+        ) {
           sigImg = await pdf.embedPng(buf);
         } else {
           sigImg = await pdf.embedJpg(buf);
         }
 
         page.drawImage(sigImg, {
-          x: 340,
-          y: 118,
-          width: 200,
-          height: 60,
+          x: MARGIN_LEFT + sigBoxWidth + 15 + 10,
+          y: sigY - 48,
+          width: sigBoxWidth - 20,
+          height: 40,
         });
       }
     } catch (e) {
@@ -221,13 +630,27 @@ async function createBaseDocument(payload: PdfPayload) {
     }
   }
 
+  // Footer with date generated
+  const today = new Date().toLocaleDateString("en-IN", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+  page.drawText(`Generated on: ${today}`, {
+    x: MARGIN_LEFT,
+    y: 20,
+    size: 8,
+    font: regular,
+    color: SECONDARY_TEXT,
+  });
+
   return pdf;
 }
 
 export async function createAdvanceBookingPdf(payload: PdfPayload) {
   const pdf = await createBaseDocument({
     ...payload,
-    title: "Advance Payment Received",
+    title: "Advance Payment Booking",
   });
 
   return pdf.save();
@@ -240,4 +663,5 @@ export async function createAdvanceAgreementPdf(payload: PdfPayload) {
   });
 
   return pdf.save();
+
 }

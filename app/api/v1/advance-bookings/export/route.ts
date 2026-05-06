@@ -4,6 +4,19 @@ import { handleRouteError, requireApiSession } from "@/lib/api";
 import { assertResourceAccess, listResource } from "@/lib/resources";
 import { createAdvanceBookingPdf } from "@/lib/pdf";
 
+function resolveAssetUrl(request: Request, value: unknown) {
+  const raw = String(value ?? "").trim();
+  if (!raw) {
+    return "";
+  }
+
+  try {
+    return new URL(raw).toString();
+  } catch {
+    return new URL(raw, request.url).toString();
+  }
+}
+
 export async function GET(request: Request) {
   try {
     const session = await requireApiSession(request);
@@ -42,9 +55,9 @@ export async function GET(request: Request) {
         eventAt: String(row.payment_at ?? new Date().toISOString()),
         memoNumber: String(row.memo_number ?? ""),
         gstNumber: String(row.gst_number ?? ""),
-        customerSignatureUrl: String(row.customer_signature_url ?? ""),
-        companySignatureUrl: String(row.company_signature_url ?? ""),
-        partyPhotoUrl: String(row.customer_photo_url ?? row.customer_photo ?? ""),
+        customerSignatureUrl: resolveAssetUrl(request, row.customer_signature_url),
+        companySignatureUrl: resolveAssetUrl(request, row.company_signature_url),
+        partyPhotoUrl: resolveAssetUrl(request, row.customer_photo_url ?? row.customer_photo),
       });
 
       const src = await PDFDocument.load(pdfBytes);
