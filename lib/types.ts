@@ -30,6 +30,7 @@ export type ModuleSlug =
   | "projects"
   | "plots"
   | "transactions"
+  | "money-transactions"
   | "advance-bookings"
   | "advance-agreements"
   | "agents"
@@ -49,6 +50,7 @@ export type ResourceName =
   | "projects"
   | "plots"
   | "transactions"
+  | "money_transactions"
   | "advance-bookings"
   | "advance-agreements"
   | "agents"
@@ -100,7 +102,7 @@ export interface ModuleColumn {
 
 export interface ModuleSummary {
   label: string;
-  type: "count" | "sum" | "unique";
+  type: "count" | "sum" | "unique" | "computed";
   field?: string;
   prefix?: string;
   suffix?: string;
