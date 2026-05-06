@@ -30,6 +30,9 @@ export async function GET(
       eventAt: String(booking.payment_at ?? new Date().toISOString()),
       memoNumber: String(booking.memo_number ?? ""),
       gstNumber: String(booking.gst_number ?? ""),
+      customerSignatureUrl: String(booking.customer_signature_url ?? ""),
+      companySignatureUrl: String(booking.company_signature_url ?? ""),
+      partyPhotoUrl: String(booking.customer_photo_url ?? booking.customer_photo ?? ""),
     });
 
     return new NextResponse(Buffer.from(pdf), {

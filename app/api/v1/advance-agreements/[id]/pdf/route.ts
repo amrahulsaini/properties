@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdvanceAgreementPdf } from "@/lib/pdf";
+import { defaultBranding } from "@/lib/brand";
 import { getResourceById, ResourceError } from "@/lib/resources";
 import { handleRouteError, requireApiSession } from "@/lib/api";
 
@@ -28,6 +29,11 @@ export async function GET(
       remainingAmount: Number(agreement.remaining_amount ?? 0),
       paymentMode: String(agreement.payment_mode ?? ""),
       eventAt: String(agreement.agreement_at ?? new Date().toISOString()),
+      memoNumber: String(agreement.memo_number ?? ""),
+      gstNumber: String(agreement.gst_number ?? defaultBranding.gstin ?? ""),
+      customerSignatureUrl: String(agreement.owner_signature_url ?? agreement.customer_signature_url ?? ""),
+      companySignatureUrl: String(agreement.company_signature_url ?? ""),
+      partyPhotoUrl: String(agreement.owner_photo_url ?? agreement.customer_photo_url ?? ""),
       conditions: [agreement.conditions_text, agreement.inspection_rights]
         .filter(Boolean)
         .join(" | "),

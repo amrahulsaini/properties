@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Briefcase,
   Building2,
@@ -60,6 +60,41 @@ interface AppShellProps {
 export function AppShell({ children, user }: AppShellProps) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    if (open) {
+      const scrollY = window.scrollY;
+      document.body.style.position = "fixed";
+      document.body.style.top = `-${scrollY}px`;
+      document.body.style.left = "0";
+      document.body.style.right = "0";
+    } else {
+      const top = document.body.style.top;
+      document.body.style.position = "";
+      document.body.style.top = "";
+      document.body.style.left = "";
+      document.body.style.right = "";
+
+      if (top) {
+        const scrollY = -parseInt(top || "0", 10) || 0;
+        window.scrollTo(0, scrollY);
+      }
+    }
+
+    return () => {
+      const top = document.body.style.top;
+      document.body.style.position = "";
+      document.body.style.top = "";
+      document.body.style.left = "";
+      document.body.style.right = "";
+
+      if (top) {
+        const scrollY = -parseInt(top || "0", 10) || 0;
+        window.scrollTo(0, scrollY);
+      }
+    };
+  }, [open]);
   const sections = getModuleSections();
 
   async function logout() {

@@ -18,6 +18,9 @@ interface PdfPayload {
   memoNumber?: string | null;
   gstNumber?: string | null;
   conditions?: string | null;
+  partyPhotoUrl?: string | null;
+  customerSignatureUrl?: string | null;
+  companySignatureUrl?: string | null;
 }
 
 async function createBaseDocument(payload: PdfPayload) {
@@ -115,6 +118,32 @@ async function createBaseDocument(payload: PdfPayload) {
     y -= 80;
   }
 
+  // Attempt to embed the party photo at top-right if provided
+  if (payload.partyPhotoUrl) {
+    try {
+      const resp = await fetch(payload.partyPhotoUrl);
+      if (resp.ok) {
+        const buf = await resp.arrayBuffer();
+        const contentType = resp.headers.get("content-type") || "";
+        let img: any = null;
+        if (contentType.includes("png") || String(payload.partyPhotoUrl).toLowerCase().endsWith(".png")) {
+          img = await pdf.embedPng(buf);
+        } else {
+          img = await pdf.embedJpg(buf);
+        }
+
+        page.drawImage(img, {
+          x: 480,
+          y: 740,
+          width: 70,
+          height: 70,
+        });
+      }
+    } catch (e) {
+      // ignore image embedding errors
+    }
+  }
+
   page.drawLine({
     start: { x: 42, y: 110 },
     end: { x: 250, y: 110 },
@@ -140,6 +169,57 @@ async function createBaseDocument(payload: PdfPayload) {
     size: 10,
     font: regular,
   });
+
+  // Embed signatures if available (draw above the signature lines)
+  if (payload.customerSignatureUrl) {
+    try {
+      const resp = await fetch(payload.customerSignatureUrl);
+      if (resp.ok) {
+        const buf = await resp.arrayBuffer();
+        const contentType = resp.headers.get("content-type") || "";
+        let sigImg: any = null;
+        if (contentType.includes("png") || String(payload.customerSignatureUrl).toLowerCase().endsWith(".png")) {
+          sigImg = await pdf.embedPng(buf);
+        } else {
+          sigImg = await pdf.embedJpg(buf);
+        }
+
+        page.drawImage(sigImg, {
+          x: 42,
+          y: 118,
+          width: 200,
+          height: 60,
+        });
+      }
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  if (payload.companySignatureUrl) {
+    try {
+      const resp = await fetch(payload.companySignatureUrl);
+      if (resp.ok) {
+        const buf = await resp.arrayBuffer();
+        const contentType = resp.headers.get("content-type") || "";
+        let sigImg: any = null;
+        if (contentType.includes("png") || String(payload.companySignatureUrl).toLowerCase().endsWith(".png")) {
+          sigImg = await pdf.embedPng(buf);
+        } else {
+          sigImg = await pdf.embedJpg(buf);
+        }
+
+        page.drawImage(sigImg, {
+          x: 340,
+          y: 118,
+          width: 200,
+          height: 60,
+        });
+      }
+    } catch (e) {
+      // ignore
+    }
+  }
 
   return pdf;
 }

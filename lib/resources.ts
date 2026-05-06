@@ -141,6 +141,41 @@ const resourceConfigs: Record<ResourceName, ResourceConfig> = {
       return next;
     },
   },
+  money_transactions: {
+    table: "money_transactions",
+    orderBy: "date DESC, created_at DESC",
+    writableFields: [
+      "name",
+      "mobile_number",
+      "transaction_type",
+      "amount",
+      "payment_mode",
+      "bank_name",
+      "account_number",
+      "transaction_id",
+      "date",
+      "due_date",
+      "status",
+      "reminder_at",
+      "description",
+      "notes",
+    ],
+    requiredFields: ["name", "transaction_type", "amount"],
+    createTransform(input, session) {
+      return withCreator(
+        {
+          ...input,
+          amount: toNumeric(input.amount),
+          status: input.status ?? "pending",
+          date: input.date ?? new Date().toISOString().slice(0, 10),
+        },
+        session,
+      );
+    },
+    updateTransform(input, session) {
+      return resourceConfigs.money_transactions.createTransform?.(input, session) ?? input;
+    },
+  },
   projects: {
     table: "projects",
     orderBy: "created_at DESC",
@@ -330,6 +365,13 @@ const resourceConfigs: Record<ResourceName, ResourceConfig> = {
       "area_sqft",
       "total_amount",
       "paid_amount",
+      "gst_enabled",
+      "gst_number",
+      "owner_photo_url",
+      "owner_signature_url",
+      "company_signature_url",
+      "gst_rate",
+      "gst_amount",
       "payment_mode",
       "refundable",
       "agreement_duration_days",
@@ -342,6 +384,9 @@ const resourceConfigs: Record<ResourceName, ResourceConfig> = {
     createTransform(input, session) {
       const totalAmount = toNumeric(input.total_amount);
       const paidAmount = toNumeric(input.paid_amount);
+      const gstEnabled = Boolean(input.gst_enabled);
+      const gstRate = gstEnabled ? toNumeric(input.gst_rate || 0) : 0;
+      const gstAmount = computeGstAmount(totalAmount, gstEnabled, gstRate);
 
       return withCreator(
         {
@@ -352,6 +397,10 @@ const resourceConfigs: Record<ResourceName, ResourceConfig> = {
           refundable: Boolean(input.refundable),
           agreement_duration_days: toNumeric(input.agreement_duration_days),
           agreement_at: input.agreement_at ?? new Date().toISOString().slice(0, 16),
+          gst_enabled: gstEnabled,
+          gst_rate: gstRate,
+          gst_amount: gstAmount,
+          total_with_gst: totalAmount + gstAmount,
           status: "active",
         },
         session,

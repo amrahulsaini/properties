@@ -152,6 +152,43 @@ export function ResourceWorkspace({ module }: ResourceWorkspaceProps) {
     };
   }, [module.resource]);
 
+  // Prefill project_id from URL -> localStorage -> first project
+  useEffect(() => {
+    if (editingId) return;
+    if (!module.fields.some((f) => f.key === "project_id")) return;
+    const current = String(form["project_id"] ?? "");
+    if (current) return;
+
+    async function findDefault() {
+      try {
+        if (typeof window !== "undefined") {
+          const params = new URL(window.location.href).searchParams;
+          const param = params.get("project_id") || params.get("project");
+          if (param) {
+            setForm((c) => ({ ...c, project_id: Number(param) }));
+            return;
+          }
+
+          const saved = localStorage.getItem("ps:defaultProjectId");
+          if (saved) {
+            setForm((c) => ({ ...c, project_id: Number(saved) }));
+            return;
+          }
+        }
+
+        const resp = await fetch("/api/v1/projects?limit=1");
+        const payload = await resp.json();
+        if (resp.ok && payload.data && payload.data[0]) {
+          setForm((c) => ({ ...c, project_id: Number(payload.data[0].id) }));
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    void findDefault();
+  }, [module.fields, editingId]);
+
   async function handleFileUpload(file: File, key: string) {
     setUploadingField(key);
     setError("");
@@ -282,6 +319,41 @@ export function ResourceWorkspace({ module }: ResourceWorkspaceProps) {
             >
               Export Excel
             </a>
+            {module.fields.some((f) => f.key === "project_id") ? (
+              <button
+                type="button"
+                className="rounded-full border border-line px-5 py-3 text-xs font-semibold uppercase tracking-[0.24em] text-muted"
+                onClick={() => {
+                  const val = form["project_id"];
+                  if (!val) {
+                    alert("Select a project (project_id) in the form first.");
+                    return;
+                  }
+
+                  try {
+                    localStorage.setItem("ps:defaultProjectId", String(val));
+                    alert("Default project saved.");
+                  } catch (e) {
+                    // ignore
+                    alert("Could not save default project.");
+                  }
+                }}
+              >
+                Set default project
+              </button>
+            ) : null}
+            {(module.slug === "advance-bookings" || module.slug === "advance-agreements") ? (
+              <a
+                className={`rounded-full border border-line px-5 py-3 text-xs font-semibold uppercase tracking-[0.24em] text-muted ${
+                  !rows?.length ? "opacity-60 pointer-events-none" : ""
+                }`}
+                href={rows?.[0]?.id ? `/api/v1/${module.resource}/${rows?.[0]?.id}/pdf` : "#"}
+                rel="noreferrer"
+                target="_blank"
+              >
+                Export PDF
+              </a>
+            ) : null}
             {module.slug === "advance-bookings" ? (
               <span className="rounded-full border border-line px-4 py-3 text-xs font-semibold uppercase tracking-[0.24em] text-muted">
                 Auto PDF + message logging enabled
@@ -527,6 +599,16 @@ export function ResourceWorkspace({ module }: ResourceWorkspaceProps) {
               >
                 Close Window
               </button>
+              {(module.slug === "advance-bookings" || module.slug === "advance-agreements") ? (
+                <a
+                  className="mr-3 rounded-full border border-line px-5 py-3 text-xs font-semibold uppercase tracking-[0.24em] text-muted"
+                  href={`/api/v1/${module.resource}/export`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Export Bill PDF
+                </a>
+              ) : null}
             </div>
             
             <div className="flex-1 overflow-auto bg-white/80 p-6 pb-12">
