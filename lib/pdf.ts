@@ -482,10 +482,13 @@ async function createBaseDocument(payload: PdfPayload) {
   if (payload.partyPhotoUrl) {
     try {
       const photoUrl = getAbsoluteImageUrl(payload.partyPhotoUrl);
+      console.log("Fetching party photo from:", photoUrl);
       if (!photoUrl) throw new Error("Invalid photo URL");
       const resp = await fetch(photoUrl);
+      console.log("Party photo fetch status:", resp.status, resp.ok);
       if (resp.ok) {
         const buf = await resp.arrayBuffer();
+        console.log("Party photo buffer size:", buf.byteLength);
         const contentType = resp.headers.get("content-type") || "";
         let img: any = null;
         if (
@@ -515,7 +518,7 @@ async function createBaseDocument(payload: PdfPayload) {
         });
       }
     } catch (e) {
-      // ignore image embedding errors
+      console.error("Failed to embed party photo:", e instanceof Error ? e.message : String(e));
     }
   }
 
@@ -612,7 +615,7 @@ async function createBaseDocument(payload: PdfPayload) {
         });
       }
     } catch (e) {
-      // ignore
+      console.error("Failed to embed customer signature:", e instanceof Error ? e.message : String(e));
     }
   }
 
@@ -642,7 +645,7 @@ async function createBaseDocument(payload: PdfPayload) {
         });
       }
     } catch (e) {
-      // ignore
+      console.error("Failed to embed company signature:", e instanceof Error ? e.message : String(e));
     }
   }
 
