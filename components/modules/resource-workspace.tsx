@@ -285,17 +285,23 @@ export function ResourceWorkspace({ module }: ResourceWorkspaceProps) {
         body: formData,
       });
       
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({}));
+        throw new Error(`Upload failed: ${result.error || response.statusText || "Unknown error"}`);
+      }
+      
       const result = await response.json();
-      if (response.ok && result.url) {
+      if (result.url) {
         setForm((current) => ({
           ...current,
           [key]: result.url,
         }));
+        URL.revokeObjectURL(localPreviewUrl);
       } else {
-        setError(result.error || "Failed to upload image.");
+        throw new Error("No URL returned from upload");
       }
     } catch (err) {
-      setError("An error occurred during upload.");
+      setError(err instanceof Error ? err.message : "An error occurred during upload.");
     } finally {
       setUploadingField(null);
     }

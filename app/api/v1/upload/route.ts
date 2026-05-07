@@ -20,13 +20,24 @@ export async function POST(request: Request) {
 
     // Save to public/uploads
     const uploadDirectory = path.join(process.cwd(), "public", "uploads");
-    await mkdir(uploadDirectory, { recursive: true });
+    
+    try {
+      await mkdir(uploadDirectory, { recursive: true });
+    } catch (err) {
+      console.error("Failed to create upload directory:", err);
+      throw new ResourceError("Failed to create upload directory.", 500);
+    }
 
     const safeName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, "-")}`;
     const fullPath = path.join(uploadDirectory, safeName);
     
-    const bytes = Buffer.from(await file.arrayBuffer());
-    await writeFile(fullPath, bytes);
+    try {
+      const bytes = Buffer.from(await file.arrayBuffer());
+      await writeFile(fullPath, bytes);
+    } catch (err) {
+      console.error("Failed to write file:", err);
+      throw new ResourceError("Failed to save file to disk.", 500);
+    }
 
     const url = `/uploads/${safeName}`;
 
