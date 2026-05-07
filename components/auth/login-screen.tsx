@@ -39,7 +39,7 @@ export function LoginScreen() {
   return (
     <main className="section-grid min-h-screen px-4 py-6 md:px-8">
       <div className="mx-auto grid min-h-[calc(100vh-3rem)] max-w-7xl overflow-hidden rounded-[36px] border border-line bg-white/60 shadow-soft backdrop-blur md:grid-cols-[1.1fr_0.9fr]">
-        <section className="relative flex flex-col justify-between overflow-hidden bg-black px-6 py-8 text-white md:px-10 md:py-10">
+        <section className="order-2 relative flex flex-col justify-between overflow-hidden bg-black px-6 py-8 text-white md:order-1 md:px-10 md:py-10">
           <div className="absolute -right-24 top-0 h-80 w-80 rounded-full bg-accent/25 blur-3xl" />
           <div className="absolute left-0 top-32 h-64 w-64 rounded-full bg-white/10 blur-3xl" />
 
@@ -48,23 +48,22 @@ export function LoginScreen() {
               {defaultBranding.productTitle}
             </p>
             <h1 className="display-font mt-5 max-w-xl text-4xl leading-tight md:text-6xl">
-              Sales, GST, bookings, land buying, and site control on one dashboard.
+              Keep sales, bookings, and property records in one simple place.
             </h1>
             <p className="mt-5 max-w-lg text-sm leading-7 text-zinc-300 md:text-base">
-              {defaultBranding.heroSubtitle}
+              Simple access for your team to manage customers, payments, and documents without extra clutter.
             </p>
             <p className="display-font mt-8 max-w-lg text-sm leading-7 text-orange-100">
-              “Plot Sale, Purchase, Construction Accounting, Development Monitoring,
-              आणि Investor Follow-up” एकाच सिस्टीममध्ये.
+              A clean, secure workspace for everyday property business tasks.
             </p>
           </div>
 
           <div className="relative grid gap-4 sm:grid-cols-2">
             {[
-              "Advance booking PDF + WhatsApp / Email flow",
-              "Plot, purchase, sale, GST and profit reporting",
-              "Agent commission, attendance, and salary tracking",
-              "Document vault for Aadhar, PAN, 7/12, agreements",
+              "Book customer visits and advance payments easily",
+              "See sales, purchases, and balances at a glance",
+              "Track team activity, attendance, and payouts",
+              "Store IDs, agreements, and property papers safely",
             ].map((item) => (
               <div
                 key={item}
@@ -76,7 +75,7 @@ export function LoginScreen() {
           </div>
         </section>
 
-        <section className="flex items-center justify-center px-6 py-8 md:px-10">
+        <section className="order-1 flex items-center justify-center px-6 py-8 md:order-2 md:px-10">
           <div className="w-full max-w-md">
             <div className="mb-8">
               <p className="text-xs font-semibold uppercase tracking-[0.28em] text-accent">
