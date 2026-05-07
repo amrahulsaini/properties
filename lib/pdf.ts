@@ -1,6 +1,7 @@
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { defaultBranding } from "@/lib/brand";
 import { formatCurrency, formatDateTime } from "@/lib/format";
+import { getEnv } from "@/lib/env";
 
 interface PdfPayload {
   title: string;
@@ -36,6 +37,15 @@ const MARGIN_LEFT = 35;
 const MARGIN_RIGHT = 35;
 const CONTENT_WIDTH = PAGE_WIDTH - MARGIN_LEFT - MARGIN_RIGHT;
 const COL_WIDTH = (CONTENT_WIDTH - 10) / 2; // Two columns with gap
+
+function getAbsoluteImageUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  if (url.startsWith("http://") || url.startsWith("https://")) {
+    return url;
+  }
+  const env = getEnv();
+  return `${env.APP_URL}${url}`;
+}
 
 async function drawSection(
   page: any,
@@ -471,7 +481,9 @@ async function createBaseDocument(payload: PdfPayload) {
   // ====== PARTY PHOTO (top-right if available) ======
   if (payload.partyPhotoUrl) {
     try {
-      const resp = await fetch(payload.partyPhotoUrl);
+      const photoUrl = getAbsoluteImageUrl(payload.partyPhotoUrl);
+      if (!photoUrl) throw new Error("Invalid photo URL");
+      const resp = await fetch(photoUrl);
       if (resp.ok) {
         const buf = await resp.arrayBuffer();
         const contentType = resp.headers.get("content-type") || "";
@@ -576,7 +588,9 @@ async function createBaseDocument(payload: PdfPayload) {
   // Embed signatures if available
   if (payload.customerSignatureUrl) {
     try {
-      const resp = await fetch(payload.customerSignatureUrl);
+      const sigUrl = getAbsoluteImageUrl(payload.customerSignatureUrl);
+      if (!sigUrl) throw new Error("Invalid signature URL");
+      const resp = await fetch(sigUrl);
       if (resp.ok) {
         const buf = await resp.arrayBuffer();
         const contentType = resp.headers.get("content-type") || "";
@@ -604,7 +618,9 @@ async function createBaseDocument(payload: PdfPayload) {
 
   if (payload.companySignatureUrl) {
     try {
-      const resp = await fetch(payload.companySignatureUrl);
+      const sigUrl = getAbsoluteImageUrl(payload.companySignatureUrl);
+      if (!sigUrl) throw new Error("Invalid signature URL");
+      const resp = await fetch(sigUrl);
       if (resp.ok) {
         const buf = await resp.arrayBuffer();
         const contentType = resp.headers.get("content-type") || "";
