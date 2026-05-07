@@ -39,7 +39,7 @@ export async function POST(request: Request) {
       throw new ResourceError("Failed to save file to disk.", 500);
     }
 
-    const url = `/uploads/${safeName}`;
+    const url = `/api/v1/uploads/${safeName}`;
 
     return NextResponse.json({ url }, { status: 201 });
   } catch (error) {
