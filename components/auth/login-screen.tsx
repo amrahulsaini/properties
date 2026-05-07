@@ -85,10 +85,6 @@ export function LoginScreen() {
               <h2 className="mt-3 text-3xl font-semibold text-ink">
                 Multi-user login
               </h2>
-              <p className="mt-2 text-sm leading-7 text-muted">
-                Admin, agent, accountant, and engineer roles with a unified Next.js,
-                Electron, and mobile API stack.
-              </p>
             </div>
 
             <form className="glass space-y-5 rounded-[30px] p-6" onSubmit={handleSubmit}>

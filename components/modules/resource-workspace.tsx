@@ -273,6 +273,12 @@ export function ResourceWorkspace({ module }: ResourceWorkspaceProps) {
     try {
       const formData = new FormData();
       formData.append("file", file);
+
+      const localPreviewUrl = URL.createObjectURL(file);
+      setForm((current) => ({
+        ...current,
+        [key]: localPreviewUrl,
+      }));
       
       const response = await fetch("/api/v1/upload", {
         method: "POST",
@@ -571,7 +577,7 @@ export function ResourceWorkspace({ module }: ResourceWorkspaceProps) {
                       <div className="flex h-full flex-col items-center justify-center space-y-2 text-center">
                         {form[field.key] ? (
                           <div className="group relative mx-auto h-16 w-32 overflow-hidden rounded-md border border-line bg-white">
-                            {field.type === "image" && String(form[field.key]).match(/\.(jpeg|jpg|gif|png|webp)$/i) ? (
+                            {field.type === "image" ? (
                               <img
                                 alt="preview"
                                 className="h-full w-full object-contain"
