@@ -1,4 +1,6 @@
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import { readFile } from "fs/promises";
+import path from "path";
 import { defaultBranding } from "@/lib/brand";
 import { formatCurrency, formatDateTime } from "@/lib/format";
 import { getEnv } from "@/lib/env";
@@ -45,6 +47,67 @@ function getAbsoluteImageUrl(url: string | null | undefined): string | null {
   }
   const env = getEnv();
   return `${env.APP_URL}${url}`;
+}
+
+function extractUploadFilename(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    const match = parsed.pathname.match(/\/(?:api\/v1\/)?uploads\/([^/?#]+)/i);
+    if (!match?.[1]) {
+      return null;
+    }
+
+    const filename = decodeURIComponent(match[1]);
+    if (!/^[a-zA-Z0-9._-]+$/.test(filename)) {
+      return null;
+    }
+
+    return filename;
+  } catch {
+    return null;
+  }
+}
+
+function contentTypeFromFilename(filename: string) {
+  const lower = filename.toLowerCase();
+  if (lower.endsWith(".png")) return "image/png";
+  if (lower.endsWith(".webp")) return "image/webp";
+  if (lower.endsWith(".gif")) return "image/gif";
+  return "image/jpeg";
+}
+
+async function loadImageBytes(url: string | null | undefined) {
+  const absoluteUrl = getAbsoluteImageUrl(url);
+  if (!absoluteUrl) {
+    return null;
+  }
+
+  const uploadFilename = extractUploadFilename(absoluteUrl);
+  if (uploadFilename) {
+    try {
+      const localPath = path.join(process.cwd(), "public", "uploads", uploadFilename);
+      const fileBuffer = await readFile(localPath);
+      return {
+        bytes: fileBuffer,
+        contentType: contentTypeFromFilename(uploadFilename),
+      };
+    } catch {
+      // Fall back to HTTP fetch below.
+    }
+  }
+
+  try {
+    const response = await fetch(absoluteUrl);
+    if (!response.ok) {
+      return null;
+    }
+
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    const contentType = response.headers.get("content-type") || "";
+    return { bytes, contentType };
+  } catch {
+    return null;
+  }
 }
 
 async function drawSection(
@@ -481,23 +544,16 @@ async function createBaseDocument(payload: PdfPayload) {
   // ====== PARTY PHOTO (top-right if available) ======
   if (payload.partyPhotoUrl) {
     try {
-      const photoUrl = getAbsoluteImageUrl(payload.partyPhotoUrl);
-      console.log("Fetching party photo from:", photoUrl);
-      if (!photoUrl) throw new Error("Invalid photo URL");
-      const resp = await fetch(photoUrl);
-      console.log("Party photo fetch status:", resp.status, resp.ok);
-      if (resp.ok) {
-        const buf = await resp.arrayBuffer();
-        console.log("Party photo buffer size:", buf.byteLength);
-        const contentType = resp.headers.get("content-type") || "";
+      const image = await loadImageBytes(payload.partyPhotoUrl);
+      if (image) {
         let img: any = null;
         if (
-          contentType.includes("png") ||
+          image.contentType.includes("png") ||
           String(payload.partyPhotoUrl).toLowerCase().endsWith(".png")
         ) {
-          img = await pdf.embedPng(buf);
+          img = await pdf.embedPng(image.bytes);
         } else {
-          img = await pdf.embedJpg(buf);
+          img = await pdf.embedJpg(image.bytes);
         }
 
         const photoSize = 65;
@@ -517,8 +573,8 @@ async function createBaseDocument(payload: PdfPayload) {
           height: photoSize,
         });
       }
-    } catch (e) {
-      console.error("Failed to embed party photo:", e instanceof Error ? e.message : String(e));
+    } catch {
+      // ignore image embedding errors
     }
   }
 
@@ -591,20 +647,16 @@ async function createBaseDocument(payload: PdfPayload) {
   // Embed signatures if available
   if (payload.customerSignatureUrl) {
     try {
-      const sigUrl = getAbsoluteImageUrl(payload.customerSignatureUrl);
-      if (!sigUrl) throw new Error("Invalid signature URL");
-      const resp = await fetch(sigUrl);
-      if (resp.ok) {
-        const buf = await resp.arrayBuffer();
-        const contentType = resp.headers.get("content-type") || "";
+      const image = await loadImageBytes(payload.customerSignatureUrl);
+      if (image) {
         let sigImg: any = null;
         if (
-          contentType.includes("png") ||
+          image.contentType.includes("png") ||
           String(payload.customerSignatureUrl).toLowerCase().endsWith(".png")
         ) {
-          sigImg = await pdf.embedPng(buf);
+          sigImg = await pdf.embedPng(image.bytes);
         } else {
-          sigImg = await pdf.embedJpg(buf);
+          sigImg = await pdf.embedJpg(image.bytes);
         }
 
         page.drawImage(sigImg, {
@@ -614,27 +666,23 @@ async function createBaseDocument(payload: PdfPayload) {
           height: 40,
         });
       }
-    } catch (e) {
-      console.error("Failed to embed customer signature:", e instanceof Error ? e.message : String(e));
+    } catch {
+      // ignore signature embedding errors
     }
   }
 
   if (payload.companySignatureUrl) {
     try {
-      const sigUrl = getAbsoluteImageUrl(payload.companySignatureUrl);
-      if (!sigUrl) throw new Error("Invalid signature URL");
-      const resp = await fetch(sigUrl);
-      if (resp.ok) {
-        const buf = await resp.arrayBuffer();
-        const contentType = resp.headers.get("content-type") || "";
+      const image = await loadImageBytes(payload.companySignatureUrl);
+      if (image) {
         let sigImg: any = null;
         if (
-          contentType.includes("png") ||
+          image.contentType.includes("png") ||
           String(payload.companySignatureUrl).toLowerCase().endsWith(".png")
         ) {
-          sigImg = await pdf.embedPng(buf);
+          sigImg = await pdf.embedPng(image.bytes);
         } else {
-          sigImg = await pdf.embedJpg(buf);
+          sigImg = await pdf.embedJpg(image.bytes);
         }
 
         page.drawImage(sigImg, {
@@ -644,8 +692,8 @@ async function createBaseDocument(payload: PdfPayload) {
           height: 40,
         });
       }
-    } catch (e) {
-      console.error("Failed to embed company signature:", e instanceof Error ? e.message : String(e));
+    } catch {
+      // ignore signature embedding errors
     }
   }
 
