@@ -1,6 +1,6 @@
 "use client";
 
-import { startTransition, useEffect, useState } from "react";
+import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/data-table";
 import { Dialog } from "@/components/ui/dialog";
@@ -8,7 +8,7 @@ import { Notice } from "@/components/ui/notice";
 import { StatCard } from "@/components/ui/stat-card";
 import { formatCurrency, formatNumber } from "@/lib/format";
 import type { GenericRecord, ModuleConfig, ModuleField } from "@/lib/types";
-import { FileText, MessageCircleMore } from "lucide-react";
+import { FileText, MessageCircleMore, Search, X, Building2, TrendingUp, TrendingDown } from "lucide-react";
 
 interface ResourceWorkspaceProps {
   module: ModuleConfig;
@@ -146,7 +146,13 @@ function computeSummary(summary: ModuleConfig["summaries"][number], rows: Generi
 
   if (summary.type === "sum" && summary.field) {
     const field = summary.field;
-    const total = rows.reduce(
+    const filter = summary.filter;
+    const filteredRows = filter
+      ? rows.filter((row) =>
+          Object.entries(filter).every(([k, v]) => row[k] === v),
+        )
+      : rows;
+    const total = filteredRows.reduce(
       (accumulator, row) => accumulator + Number(row[field] ?? 0),
       0,
     );
@@ -154,8 +160,22 @@ function computeSummary(summary: ModuleConfig["summaries"][number], rows: Generi
     return summary.prefix ? formatCurrency(total) : formatNumber(total);
   }
 
+  if (summary.type === "computed") {
+    // Balance = income - expense
+    const income = rows
+      .filter((r) => r["transaction_type"] === "income")
+      .reduce((a, r) => a + Number(r["amount"] ?? 0), 0);
+    const expense = rows
+      .filter((r) => r["transaction_type"] === "expense")
+      .reduce((a, r) => a + Number(r["amount"] ?? 0), 0);
+    return formatCurrency(income - expense);
+  }
+
   return "0";
 }
+
+const hasProjectSelect = (fields: ModuleField[]) =>
+  fields.some((f) => f.type === "project_select");
 
 export function ResourceWorkspace({ module }: ResourceWorkspaceProps) {
   const [rows, setRows] = useState<GenericRecord[]>([]);
@@ -168,6 +188,91 @@ export function ResourceWorkspace({ module }: ResourceWorkspaceProps) {
   const [uploadingField, setUploadingField] = useState<string | null>(null);
   const [deletingRow, setDeletingRow] = useState<GenericRecord | null>(null);
   const [projectCodeStatus, setProjectCodeStatus] = useState<"idle" | "checking" | "available" | "taken">("idle");
+
+  // Project name map for resolving project_id → name
+  const [projectMap, setProjectMap] = useState<Map<number, { name: string; code: string }>>(new Map());
+  const projectMapLoaded = useRef(false);
+
+  // Instant search state — pure client-side, zero latency
+  const [searchQuery, setSearchQuery] = useState("");
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Load project names once for modules that use project_select
+  useEffect(() => {
+    if (!hasProjectSelect(module.fields) || projectMapLoaded.current) return;
+    projectMapLoaded.current = true;
+
+    fetch("/api/v1/projects?limit=500")
+      .then((r) => r.json())
+      .then((payload) => {
+        if (!payload.data) return;
+        const map = new Map<number, { name: string; code: string }>();
+        for (const p of payload.data) {
+          map.set(Number(p.id), { name: String(p.name ?? ""), code: String(p.code ?? "") });
+        }
+        setProjectMap(map);
+      })
+      .catch(() => {});
+  }, [module.fields]);
+
+  // Enrich rows with _project_name for display and search
+  const enrichedRows = useMemo(() => {
+    if (!hasProjectSelect(module.fields) || projectMap.size === 0) return rows;
+    return rows.map((row) => {
+      const pid = Number(row["project_id"]);
+      const proj = projectMap.get(pid);
+      const label = proj
+        ? proj.code
+          ? `${proj.code} – ${proj.name}`
+          : proj.name
+        : pid ? `Project ${pid}` : "";
+      return { ...row, _project_name: label };
+    });
+  }, [rows, projectMap, module.fields]);
+
+  // Instant client-side filtering — O(n) array scan, sub-millisecond
+  const filteredRows = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return enrichedRows;
+    return enrichedRows.filter((row) =>
+      Object.values(row).some((v) => String(v ?? "").toLowerCase().includes(q)),
+    );
+  }, [enrichedRows, searchQuery]);
+
+  // Branch (project) summary for project-linked modules
+  const branchSummary = useMemo(() => {
+    if (!hasProjectSelect(module.fields)) return [];
+    const map = new Map<number, { name: string; count: number; income: number; expense: number; total: number }>();
+    for (const row of rows) {
+      const pid = Number(row["project_id"]);
+      if (!pid) continue;
+      const proj = projectMap.get(pid);
+      const name = proj
+        ? proj.code
+          ? `${proj.code} – ${proj.name}`
+          : proj.name || `Project ${pid}`
+        : `Project ${pid}`;
+      const existing = map.get(pid) ?? { name, count: 0, income: 0, expense: 0, total: 0 };
+      existing.count++;
+      const amt = Number(row["amount"] ?? 0);
+      existing.total += amt;
+      if (row["entry_type"] === "income" || row["transaction_type"] === "income") {
+        existing.income += amt;
+      } else if (row["entry_type"] === "expense" || row["transaction_type"] === "expense") {
+        existing.expense += amt;
+      }
+      map.set(pid, existing);
+    }
+    return Array.from(map.values()).sort((a, b) => b.count - a.count);
+  }, [rows, projectMap, module.fields]);
+
+  // Build display columns — prepend project name if applicable
+  const displayColumns = useMemo(() => {
+    if (!hasProjectSelect(module.fields) || projectMap.size === 0) return module.columns;
+    const already = module.columns.some((c) => c.key === "_project_name" || c.key === "project_id");
+    if (already) return module.columns;
+    return [{ key: "_project_name", label: "Branch / Project" }, ...module.columns];
+  }, [module.columns, module.fields, projectMap]);
 
   async function loadRows() {
     if (!module.resource) {
@@ -279,17 +384,17 @@ export function ResourceWorkspace({ module }: ResourceWorkspaceProps) {
         ...current,
         [key]: localPreviewUrl,
       }));
-      
+
       const response = await fetch("/api/v1/upload", {
         method: "POST",
         body: formData,
       });
-      
+
       if (!response.ok) {
         const result = await response.json().catch(() => ({}));
         throw new Error(`Upload failed: ${result.error || response.statusText || "Unknown error"}`);
       }
-      
+
       const result = await response.json();
       if (result.url) {
         setForm((current) => ({
@@ -424,8 +529,16 @@ export function ResourceWorkspace({ module }: ResourceWorkspaceProps) {
     setDeletingRow(row);
   }
 
+  function openModal() {
+    setSearchQuery("");
+    setIsRecordsModalOpen(true);
+    // Auto-focus search on next tick
+    setTimeout(() => searchInputRef.current?.focus(), 80);
+  }
+
   return (
     <div className="space-y-4">
+      {/* Header card */}
       <Card className="relative overflow-hidden">
         <div className="absolute -right-14 top-0 h-44 w-44 rounded-full bg-accent-soft blur-3xl" />
         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-accent">
@@ -445,22 +558,19 @@ export function ResourceWorkspace({ module }: ResourceWorkspaceProps) {
             >
               Export Excel
             </a>
-            {(module.slug === "advance-bookings" || module.slug === "advance-agreements") ? (
-              <a
-                className={`rounded-full border border-line px-5 py-3 text-xs font-semibold uppercase tracking-[0.24em] text-muted ${
-                  !rows?.length ? "opacity-60 pointer-events-none" : ""
-                }`}
-                href={rows?.length ? `/api/v1/${module.resource}/export` : "#"}
-                rel="noreferrer"
-                target="_blank"
-              >
-                Export PDF
-              </a>
-            ) : null}
+            <a
+              className="rounded-full border border-line px-5 py-3 text-xs font-semibold uppercase tracking-[0.24em] text-muted"
+              href={`/api/v1/reports/export-pdf?resource=${module.resource}`}
+              rel="noreferrer"
+              target="_blank"
+            >
+              Export PDF
+            </a>
           </div>
         ) : null}
       </Card>
 
+      {/* Summary stat cards */}
       {module.summaries.length ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {module.summaries.map((summary) => (
@@ -474,6 +584,7 @@ export function ResourceWorkspace({ module }: ResourceWorkspaceProps) {
         </div>
       ) : null}
 
+      {/* Form card */}
       <div className="space-y-4">
         <Card>
           <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
@@ -486,21 +597,23 @@ export function ResourceWorkspace({ module }: ResourceWorkspaceProps) {
               </h3>
             </div>
             <div className="flex flex-wrap items-center gap-3">
-              <button style={{cursor:'pointer'}} 
+              <button
+                style={{ cursor: "pointer" }}
                 className="flex items-center gap-2 rounded-full bg-black px-5 py-3 text-xs font-semibold uppercase tracking-[0.24em] text-white transition hover:brightness-105"
-                onClick={() => setIsRecordsModalOpen(true)}
+                onClick={openModal}
                 type="button"
               >
                 {loading ? (
-                   <svg className="animate-spin h-3.5 w-3.5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                   </svg>
+                  <svg className="animate-spin h-3.5 w-3.5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
                 ) : null}
                 View all records {!loading && `(${rows.length})`}
               </button>
               {editingId ? (
-                <button style={{cursor:'pointer'}} 
+                <button
+                  style={{ cursor: "pointer" }}
                   className="rounded-full border border-line px-4 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-muted"
                   onClick={resetForm}
                   type="button"
@@ -611,7 +724,7 @@ export function ResourceWorkspace({ module }: ResourceWorkspaceProps) {
                               <span className="mt-2 block animate-pulse">Uploading...</span>
                             ) : (
                               <>
-                                <span className="mb-1 block font-semibold text-accent">Click or Drag & Drop</span>
+                                <span className="mb-1 block font-semibold text-accent">Click or Drag &amp; Drop</span>
                                 <span className="text-[10px] uppercase tracking-wider text-muted">Upload {field.label}</span>
                               </>
                             )}
@@ -689,14 +802,16 @@ export function ResourceWorkspace({ module }: ResourceWorkspaceProps) {
             ) : null}
 
             <div className="flex flex-wrap gap-3">
-              <button style={{cursor:'pointer'}} 
+              <button
+                style={{ cursor: "pointer" }}
                 className="rounded-full bg-accent px-5 py-3 text-xs font-semibold uppercase tracking-[0.24em] text-white transition hover:brightness-105 disabled:opacity-70"
                 disabled={saving}
                 type="submit"
               >
                 {saving ? "Saving..." : editingId ? "Update record" : "Create record"}
               </button>
-              <button style={{cursor:'pointer'}} 
+              <button
+                style={{ cursor: "pointer" }}
                 className="rounded-full border border-line px-5 py-3 text-xs font-semibold uppercase tracking-[0.24em] text-muted"
                 onClick={resetForm}
                 type="button"
@@ -708,44 +823,156 @@ export function ResourceWorkspace({ module }: ResourceWorkspaceProps) {
         </Card>
       </div>
 
+      {/* ── Records Modal ── */}
       {isRecordsModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm transition-opacity animate-in fade-in duration-200">
-          <div className="relative flex max-h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-[32px] bg-white shadow-2xl ring-1 ring-black/5 animate-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between border-b border-line bg-app/50 p-6 backdrop-blur-md">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted">
-                  Live records
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+          <div className="relative flex max-h-[92vh] w-full max-w-7xl flex-col overflow-hidden rounded-[32px] bg-white shadow-2xl ring-1 ring-black/8">
+
+            {/* Modal header */}
+            <div className="flex items-start justify-between gap-4 border-b border-line bg-black px-6 py-5">
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-zinc-400">
+                  Live records · {module.title}
                 </p>
-                <h3 className="mt-1 flex items-center gap-3 text-2xl font-semibold text-ink">
+                <h3 className="mt-1 text-xl font-semibold text-white">
                   {loading ? (
-                    <span className="flex items-center gap-2 text-muted text-base">
-                      <svg className="animate-spin h-5 w-5 text-accent" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <span className="flex items-center gap-2 text-zinc-300 text-base">
+                      <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                       </svg>
-                      Loading records...
+                      Loading...
                     </span>
                   ) : (
-                    `${rows.length} ${module.title}`
+                    <span>
+                      {filteredRows.length !== rows.length ? (
+                        <>
+                          <span className="text-accent">{filteredRows.length}</span>
+                          <span className="text-zinc-400"> / {rows.length} records</span>
+                        </>
+                      ) : (
+                        `${rows.length} ${module.title}`
+                      )}
+                    </span>
                   )}
                 </h3>
               </div>
-              <button style={{cursor:'pointer'}} 
-                className="rounded-full bg-black px-6 py-3 text-xs font-semibold uppercase tracking-[0.24em] text-white transition hover:bg-zinc-800"
+
+              {/* Search bar */}
+              <div className="relative flex-1 max-w-sm">
+                <Search
+                  size={15}
+                  className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none"
+                />
+                <input
+                  ref={searchInputRef}
+                  className="w-full rounded-full border border-zinc-700 bg-zinc-900 pl-10 pr-10 py-2.5 text-sm text-white placeholder-zinc-500 outline-none focus:border-accent focus:ring-1 focus:ring-accent transition"
+                  placeholder="Search records instantly..."
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+                {searchQuery ? (
+                  <button
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white transition"
+                    onClick={() => setSearchQuery("")}
+                    type="button"
+                  >
+                    <X size={14} />
+                  </button>
+                ) : null}
+              </div>
+
+              <button
+                style={{ cursor: "pointer" }}
+                className="shrink-0 rounded-full border border-zinc-700 px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.2em] text-zinc-300 transition hover:border-white hover:text-white"
                 onClick={() => setIsRecordsModalOpen(false)}
               >
-                Close Window
+                Close
               </button>
             </div>
-            
-            <div className="flex-1 overflow-auto bg-white/80 p-6 pb-12">
-              {!rows.length && !loading ? (
-                <div className="rounded-[24px] border border-dashed border-line p-10 text-center text-sm text-muted">
-                  {module.emptyState}
+
+            {/* Branch / Project summary strip */}
+            {branchSummary.length > 0 ? (
+              <div className="border-b border-line bg-zinc-50 px-6 py-4">
+                <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.28em] text-zinc-400">
+                  Branches
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {branchSummary.map((branch) => (
+                    <button
+                      key={branch.name}
+                      type="button"
+                      onClick={() => setSearchQuery(branch.name.split(" – ")[0] ?? branch.name)}
+                      className={`group flex items-center gap-2.5 rounded-2xl border px-4 py-2.5 text-left transition hover:border-accent hover:bg-accent/5 ${
+                        searchQuery && branch.name.toLowerCase().includes(searchQuery.toLowerCase())
+                          ? "border-accent bg-accent/8"
+                          : "border-line bg-white"
+                      }`}
+                    >
+                      <Building2
+                        size={14}
+                        className="shrink-0 text-accent"
+                      />
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-ink truncate max-w-[140px]">
+                          {branch.name}
+                        </p>
+                        <p className="text-[10px] text-muted">
+                          {branch.count} record{branch.count !== 1 ? "s" : ""}
+                          {branch.total > 0 ? ` · ${formatCurrency(branch.total)}` : ""}
+                        </p>
+                      </div>
+                    </button>
+                  ))}
+                  {searchQuery ? (
+                    <button
+                      type="button"
+                      onClick={() => setSearchQuery("")}
+                      className="flex items-center gap-1.5 rounded-2xl border border-dashed border-zinc-300 px-4 py-2.5 text-xs text-muted hover:border-accent hover:text-accent transition"
+                    >
+                      <X size={12} />
+                      Clear filter
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+
+            {/* Records body */}
+            <div className="flex-1 overflow-auto bg-white/95 p-6 pb-12">
+              {loading ? (
+                <div className="flex flex-col items-center justify-center py-16 text-muted">
+                  <svg className="animate-spin h-8 w-8 text-accent mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  <p className="text-sm font-medium">Loading records...</p>
+                </div>
+              ) : filteredRows.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 text-center">
+                  {searchQuery ? (
+                    <>
+                      <Search size={32} className="mb-4 text-zinc-300" />
+                      <p className="text-sm font-semibold text-ink">No results for &ldquo;{searchQuery}&rdquo;</p>
+                      <p className="mt-1 text-xs text-muted">Try a different search term or clear the filter</p>
+                      <button
+                        className="mt-4 rounded-full border border-line px-4 py-2 text-xs font-semibold text-muted transition hover:border-accent hover:text-accent"
+                        onClick={() => setSearchQuery("")}
+                        type="button"
+                      >
+                        Clear search
+                      </button>
+                    </>
+                  ) : (
+                    <div className="rounded-[24px] border border-dashed border-line p-10 text-sm text-muted w-full">
+                      {module.emptyState}
+                    </div>
+                  )}
                 </div>
               ) : (
                 <DataTable
-                  columns={module.columns}
+                  columns={displayColumns}
                   getExtraAction={(row) => {
                     if (module.slug === "advance-bookings" || module.slug === "advance-agreements") {
                       const pdfUrl =
@@ -757,10 +984,10 @@ export function ResourceWorkspace({ module }: ResourceWorkspaceProps) {
                           ? row.customer_phone ?? ""
                           : row.owner_phone ?? row.customer_phone ?? "",
                       ).replace(/\D/g, "");
-                      const origin = typeof window !== "undefined" 
-                        ? window.location.origin 
-                        : (typeof process !== "undefined" && process.env.NEXT_PUBLIC_APP_URL 
-                          ? process.env.NEXT_PUBLIC_APP_URL 
+                      const origin = typeof window !== "undefined"
+                        ? window.location.origin
+                        : (typeof process !== "undefined" && process.env.NEXT_PUBLIC_APP_URL
+                          ? process.env.NEXT_PUBLIC_APP_URL
                           : "https://yourdomain.com");
                       const fullPdfUrl = `${origin}${pdfUrl}`;
                       const whatsappMessage = `Your ${module.slug === "advance-bookings" ? "Advance Booking" : "Advance Agreement"} PDF:\n${fullPdfUrl}`;
@@ -800,9 +1027,9 @@ export function ResourceWorkspace({ module }: ResourceWorkspaceProps) {
                   }}
                   onEdit={(row) => {
                     handleEdit(row);
-                    setIsRecordsModalOpen(false); // Close modal when editing
+                    setIsRecordsModalOpen(false);
                   }}
-                  rows={rows}
+                  rows={filteredRows}
                 />
               )}
             </div>
@@ -817,14 +1044,16 @@ export function ResourceWorkspace({ module }: ResourceWorkspaceProps) {
           onClose={() => setDeletingRow(null)}
         >
           <div className="mt-6 flex justify-end gap-3">
-            <button style={{cursor:'pointer'}} 
+            <button
+              style={{ cursor: "pointer" }}
               className="rounded-full px-5 py-3 text-xs font-semibold uppercase tracking-[0.24em] text-muted transition hover:bg-neutral-100"
               onClick={() => setDeletingRow(null)}
               type="button"
             >
               Cancel
             </button>
-            <button style={{cursor:'pointer'}} 
+            <button
+              style={{ cursor: "pointer" }}
               className="rounded-full bg-rose-600 px-5 py-3 text-xs font-semibold uppercase tracking-[0.24em] text-white transition hover:bg-rose-700"
               onClick={handleDeleteConfirm}
               type="button"

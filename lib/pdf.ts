@@ -40,6 +40,19 @@ const MARGIN_RIGHT = 35;
 const CONTENT_WIDTH = PAGE_WIDTH - MARGIN_LEFT - MARGIN_RIGHT;
 const COL_WIDTH = (CONTENT_WIDTH - 10) / 2; // Two columns with gap
 
+const DEVELOPER_TERMS = [
+  "Plot will be confirmed only after full payment.",
+  "Developer can cancel agreement if payment is not completed.",
+  "Advance amount is non-refundable unless specified.",
+  "Developer has rights to modify project if required.",
+];
+
+const BUYER_TERMS = [
+  "Buyer must complete payment on time.",
+  "All taxes and charges are payable by Buyer.",
+  "Delay due to government or natural reasons is not Developer's responsibility.",
+];
+
 function getAbsoluteImageUrl(url: string | null | undefined): string | null {
   if (!url) return null;
   if (url.startsWith("http://") || url.startsWith("https://")) {
@@ -136,6 +149,165 @@ async function drawSection(
     borderColor,
     borderWidth: 1,
   });
+}
+
+function wrapTextLines(text: string, font: any, size: number, maxWidth: number) {
+  const paragraphs = String(text ?? "").split(/\r?\n/);
+  const lines: string[] = [];
+
+  for (const paragraph of paragraphs) {
+    const words = paragraph.trim().split(/\s+/).filter(Boolean);
+    if (!words.length) {
+      lines.push("");
+      continue;
+    }
+
+    let currentLine = words[0];
+    for (const word of words.slice(1)) {
+      const candidate = `${currentLine} ${word}`;
+      if (font.widthOfTextAtSize(candidate, size) <= maxWidth) {
+        currentLine = candidate;
+      } else {
+        lines.push(currentLine);
+        currentLine = word;
+      }
+    }
+
+    lines.push(currentLine);
+  }
+
+  return lines.length ? lines : [""];
+}
+
+function drawWrappedText(
+  page: any,
+  text: string,
+  x: number,
+  y: number,
+  font: any,
+  size: number,
+  color: any,
+  maxWidth: number,
+  lineHeight: number,
+) {
+  const lines = wrapTextLines(text, font, size, maxWidth);
+
+  lines.forEach((line, index) => {
+    page.drawText(line || " ", {
+      x,
+      y: y - index * lineHeight,
+      size,
+      font,
+      color,
+      maxWidth,
+    });
+  });
+
+  return lines.length * lineHeight;
+}
+
+function drawTextSection(
+  page: any,
+  title: string,
+  text: string,
+  y: number,
+  font: any,
+  regular: any,
+) {
+  const textSize = 10;
+  const lineHeight = 13;
+  const boxPadding = 10;
+  const contentWidth = CONTENT_WIDTH - boxPadding * 2;
+  const measuredLines = wrapTextLines(text, regular, textSize, contentWidth);
+  const boxHeight = 18 + boxPadding + measuredLines.length * lineHeight + boxPadding;
+
+  page.drawText(title, {
+    x: MARGIN_LEFT,
+    y,
+    size: 11,
+    font,
+    color: PRIMARY_TEXT,
+  });
+
+  page.drawRectangle({
+    x: MARGIN_LEFT,
+    y: y - 18 - boxHeight,
+    width: CONTENT_WIDTH,
+    height: boxHeight,
+    color: GRID_BG,
+    borderColor: BORDER_COLOR,
+    borderWidth: 1,
+  });
+
+  drawWrappedText(
+    page,
+    text,
+    MARGIN_LEFT + boxPadding,
+    y - 18 - boxPadding,
+    regular,
+    textSize,
+    PRIMARY_TEXT,
+    contentWidth,
+    lineHeight,
+  );
+
+  return y - 18 - boxHeight - 20;
+}
+
+function drawTermsSection(
+  page: any,
+  title: string,
+  items: string[],
+  y: number,
+  font: any,
+  regular: any,
+) {
+  const titleSize = 11;
+  const bulletSize = 9.5;
+  const lineHeight = 12;
+  const boxPadding = 10;
+  const innerWidth = CONTENT_WIDTH - boxPadding * 2;
+  const itemHeights = items.map((item) => {
+    const wrapped = wrapTextLines(`- ${item}`, regular, bulletSize, innerWidth);
+    return wrapped.length * lineHeight;
+  });
+  const boxHeight = 18 + boxPadding + itemHeights.reduce((sum, height) => sum + height + 3, 0) + boxPadding - 3;
+
+  page.drawText(title, {
+    x: MARGIN_LEFT,
+    y,
+    size: titleSize,
+    font,
+    color: PRIMARY_TEXT,
+  });
+
+  page.drawRectangle({
+    x: MARGIN_LEFT,
+    y: y - 18 - boxHeight,
+    width: CONTENT_WIDTH,
+    height: boxHeight,
+    color: GRID_BG,
+    borderColor: BORDER_COLOR,
+    borderWidth: 1,
+  });
+
+  let currentY = y - 18 - boxPadding;
+  items.forEach((item, index) => {
+    drawWrappedText(
+      page,
+      `- ${item}`,
+      MARGIN_LEFT + boxPadding,
+      currentY,
+      regular,
+      bulletSize,
+      PRIMARY_TEXT,
+      innerWidth,
+      lineHeight,
+    );
+    currentY -= itemHeights[index] + 3;
+  });
+
+  return y - 18 - boxHeight - 20;
 }
 
 async function createBaseDocument(payload: PdfPayload) {
@@ -508,38 +680,11 @@ async function createBaseDocument(payload: PdfPayload) {
 
   // ====== CONDITIONS SECTION (if present) ======
   if (payload.conditions) {
-    page.drawText("CONDITIONS & TERMS", {
-      x: MARGIN_LEFT,
-      y,
-      size: 11,
-      font: bold,
-      color: PRIMARY_TEXT,
-    });
-    y -= 18;
-
-    const conditionsHeight = 50;
-    page.drawRectangle({
-      x: MARGIN_LEFT,
-      y: y - conditionsHeight,
-      width: CONTENT_WIDTH,
-      height: conditionsHeight,
-      color: GRID_BG,
-      borderColor: BORDER_COLOR,
-      borderWidth: 1,
-    });
-
-    page.drawText(payload.conditions, {
-      x: MARGIN_LEFT + 10,
-      y: y - 12,
-      size: 10,
-      lineHeight: 13,
-      maxWidth: CONTENT_WIDTH - 20,
-      font: regular,
-      color: PRIMARY_TEXT,
-    });
-
-    y -= conditionsHeight + 20;
+    y = drawTextSection(page, "ADDITIONAL CONDITIONS", payload.conditions, y, bold, regular);
   }
+
+  y = drawTermsSection(page, "DEVELOPER TERMS", DEVELOPER_TERMS, y, bold, regular);
+  y = drawTermsSection(page, "TERMS & CONDITIONS", BUYER_TERMS, y, bold, regular);
 
   // ====== PARTY PHOTO (top-right if available) ======
   if (payload.partyPhotoUrl) {
