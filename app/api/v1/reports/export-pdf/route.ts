@@ -3,22 +3,16 @@ import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { handleRouteError, requireApiSession } from "@/lib/api";
 import { assertResourceAccess, listResource, ResourceError } from "@/lib/resources";
 
-const PAGE_WIDTH = 595;
-const PAGE_HEIGHT = 842;
-const MARGIN_LEFT = 34;
-const MARGIN_RIGHT = 34;
-const MARGIN_TOP = 34;
-const MARGIN_BOTTOM = 34;
-const CONTENT_WIDTH = PAGE_WIDTH - MARGIN_LEFT - MARGIN_RIGHT;
-const LABEL_WIDTH = 150;
-const VALUE_X = MARGIN_LEFT + LABEL_WIDTH;
-const VALUE_WIDTH = CONTENT_WIDTH - LABEL_WIDTH;
-
-const TITLE_COLOR = rgb(0.08, 0.08, 0.08);
-const LABEL_COLOR = rgb(0.35, 0.35, 0.35);
-const VALUE_COLOR = rgb(0.12, 0.12, 0.12);
-const LINE_COLOR = rgb(0.87, 0.87, 0.87);
-const ACCENT_COLOR = rgb(0.95, 0.42, 0.11);
+const PAGE_WIDTH = 842;
+const PAGE_HEIGHT = 595;
+const MARGIN = 20;
+const HEADER_HEIGHT = 30;
+const ROW_HEIGHT = 18;
+const HEADER_COLOR = rgb(0.15, 0.15, 0.15);
+const HEADER_BG = rgb(0.95, 0.42, 0.11);
+const ROW_BG = rgb(1, 1, 1);
+const BORDER_COLOR = rgb(0.9, 0.9, 0.9);
+const TEXT_COLOR = rgb(0.2, 0.2, 0.2);
 
 function titleCase(value: string) {
   return value
@@ -50,162 +44,161 @@ function formatValue(value: unknown): string {
   return String(value);
 }
 
-function wrapTextLines(text: string, font: any, size: number, maxWidth: number) {
-  const paragraphs = String(text ?? "").split(/\r?\n/);
-  const lines: string[] = [];
+function getColumnWidths(
+  columns: string[],
+  rows: Record<string, unknown>[],
+  font: any,
+  fontSize: number,
+  maxWidth: number,
+) {
+  const widths: Record<string, number> = {};
+  const minColWidth = 60;
+  const maxColWidth = 200;
 
-  for (const paragraph of paragraphs) {
-    const words = paragraph.trim().split(/\s+/).filter(Boolean);
-    if (!words.length) {
-      lines.push("");
-      continue;
+  for (const col of columns) {
+    let width = font.widthOfTextAtSize(titleCase(col), fontSize) + 16;
+
+    for (const row of rows) {
+      const val = formatValue(row[col]);
+      const textWidth = font.widthOfTextAtSize(val, fontSize - 1) + 12;
+      width = Math.max(width, textWidth);
     }
 
-    let currentLine = words[0];
-    for (const word of words.slice(1)) {
-      const candidate = `${currentLine} ${word}`;
-      if (font.widthOfTextAtSize(candidate, size) <= maxWidth) {
-        currentLine = candidate;
-      } else {
-        lines.push(currentLine);
-        currentLine = word;
-      }
-    }
-
-    lines.push(currentLine);
+    widths[col] = Math.min(maxColWidth, Math.max(minColWidth, width));
   }
 
-  return lines.length ? lines : [""];
+  const totalWidth = Object.values(widths).reduce((a, b) => a + b, 0);
+  const scaleFactor = Math.min(1, maxWidth / totalWidth);
+
+  for (const col in widths) {
+    widths[col] *= scaleFactor;
+  }
+
+  return widths;
 }
 
-function drawWrappedText(
-  page: any,
-  text: string,
-  x: number,
-  y: number,
-  font: any,
-  size: number,
-  color: any,
-  maxWidth: number,
-  lineHeight: number,
-) {
-  const lines = wrapTextLines(text, font, size, maxWidth);
-  lines.forEach((line, index) => {
-    page.drawText(line || " ", {
-      x,
-      y: y - index * lineHeight,
-      size,
-      font,
-      color,
-      maxWidth,
-    });
-  });
-  return lines.length * lineHeight;
-}
-
-function drawPageHeader(
-  page: any,
-  bold: any,
-  regular: any,
-  resource: string,
-  pageNumber: number,
-  totalRows: number,
-  rowIndex: number,
-) {
-  const headerY = PAGE_HEIGHT - MARGIN_TOP;
-
-  page.drawText(`${titleCase(resource)} PDF Export`, {
-    x: MARGIN_LEFT,
-    y: headerY,
-    size: 18,
-    font: bold,
-    color: ACCENT_COLOR,
-  });
-
-  page.drawText(`Record ${rowIndex + 1} of ${totalRows}`, {
-    x: MARGIN_LEFT,
-    y: headerY - 20,
-    size: 9,
-    font: regular,
-    color: LABEL_COLOR,
-  });
-
-  page.drawText(`Page ${pageNumber}`, {
-    x: PAGE_WIDTH - MARGIN_RIGHT - 60,
-    y: headerY - 20,
-    size: 9,
-    font: regular,
-    color: LABEL_COLOR,
-  });
-
-  page.drawLine({
-    start: { x: MARGIN_LEFT, y: headerY - 28 },
-    end: { x: PAGE_WIDTH - MARGIN_RIGHT, y: headerY - 28 },
-    thickness: 1.5,
-    color: ACCENT_COLOR,
-  });
-}
-
-async function addRecordPages(
+async function addTablePage(
   pdf: PDFDocument,
   bold: any,
   regular: any,
   resource: string,
-  row: Record<string, unknown>,
-  rowIndex: number,
+  columns: string[],
+  columnWidths: Record<string, number>,
+  rows: Record<string, unknown>[],
+  startRowIndex: number,
+  pageIndex: number,
+  totalPages: number,
   totalRows: number,
-) {
-  const entries = Object.entries(row).filter(([key]) => !key.startsWith("_"));
+): Promise<number> {
+  const page = pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+  let y = PAGE_HEIGHT - MARGIN - 20;
 
-  let page = pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-  let pageNumber = pdf.getPageCount();
-  let y = PAGE_HEIGHT - MARGIN_TOP - 48;
+  page.drawText(`${titleCase(resource)} Report - Page ${pageIndex + 1}/${totalPages}`, {
+    x: MARGIN,
+    y,
+    size: 12,
+    font: bold,
+    color: rgb(0.15, 0.15, 0.15),
+  });
 
-  drawPageHeader(page, bold, regular, resource, pageNumber, totalRows, rowIndex);
+  y -= 25;
 
-  for (const [key, value] of entries) {
-    const label = titleCase(key);
-    const valueText = formatValue(value);
-    const valueLines = wrapTextLines(valueText, regular, 10, VALUE_WIDTH - 4);
-    const rowHeight = Math.max(18, valueLines.length * 12);
+  let x = MARGIN;
+  const headerY = y;
+  page.drawRectangle({
+    x: MARGIN,
+    y: headerY - HEADER_HEIGHT,
+    width: PAGE_WIDTH - 2 * MARGIN,
+    height: HEADER_HEIGHT,
+    color: HEADER_BG,
+  });
 
-    if (y - rowHeight < MARGIN_BOTTOM) {
-      page = pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-      pageNumber = pdf.getPageCount();
-      y = PAGE_HEIGHT - MARGIN_TOP - 48;
-      drawPageHeader(page, bold, regular, resource, pageNumber, totalRows, rowIndex);
-    }
-
-    page.drawText(label, {
-      x: MARGIN_LEFT,
-      y,
-      size: 8.5,
+  for (const col of columns) {
+    const colWidth = columnWidths[col];
+    page.drawText(titleCase(col), {
+      x: x + 4,
+      y: headerY - 20,
+      size: 9,
       font: bold,
-      color: LABEL_COLOR,
-      maxWidth: LABEL_WIDTH - 8,
+      color: rgb(1, 1, 1),
+      maxWidth: colWidth - 8,
     });
-
-    drawWrappedText(
-      page,
-      valueText,
-      VALUE_X,
-      y,
-      regular,
-      10,
-      VALUE_COLOR,
-      VALUE_WIDTH,
-      12,
-    );
 
     page.drawLine({
-      start: { x: MARGIN_LEFT, y: y - rowHeight - 4 },
-      end: { x: PAGE_WIDTH - MARGIN_RIGHT, y: y - rowHeight - 4 },
+      start: { x: x + colWidth, y: headerY },
+      end: { x: x + colWidth, y: headerY - HEADER_HEIGHT },
       thickness: 0.5,
-      color: LINE_COLOR,
+      color: BORDER_COLOR,
     });
 
-    y -= rowHeight + 12;
+    x += colWidth;
   }
+
+  y = headerY - HEADER_HEIGHT - 2;
+  let rowIndex = startRowIndex;
+
+  for (const row of rows) {
+    const rowTextHeight = ROW_HEIGHT;
+
+    if (y - rowTextHeight < MARGIN) {
+      break;
+    }
+
+    page.drawRectangle({
+      x: MARGIN,
+      y: y - rowTextHeight,
+      width: PAGE_WIDTH - 2 * MARGIN,
+      height: rowTextHeight,
+      color: rowIndex % 2 === 0 ? rgb(0.98, 0.98, 0.98) : ROW_BG,
+    });
+
+    x = MARGIN;
+    for (const col of columns) {
+      const colWidth = columnWidths[col];
+      const value = formatValue(row[col]);
+
+      page.drawText(value, {
+        x: x + 4,
+        y: y - 14,
+        size: 8,
+        font: regular,
+        color: TEXT_COLOR,
+        maxWidth: colWidth - 8,
+      });
+
+      page.drawLine({
+        start: { x: x + colWidth, y },
+        end: { x: x + colWidth, y: y - rowTextHeight },
+        thickness: 0.5,
+        color: BORDER_COLOR,
+      });
+
+      x += colWidth;
+    }
+
+    page.drawLine({
+      start: { x: MARGIN, y: y - rowTextHeight },
+      end: { x: PAGE_WIDTH - MARGIN, y: y - rowTextHeight },
+      thickness: 0.5,
+      color: BORDER_COLOR,
+    });
+
+    y -= rowTextHeight;
+    rowIndex++;
+  }
+
+  page.drawText(
+    `Showing rows ${startRowIndex + 1}-${Math.min(rowIndex, totalRows)} of ${totalRows}`,
+    {
+      x: MARGIN,
+      y: MARGIN - 5,
+      size: 7,
+      font: regular,
+      color: rgb(0.6, 0.6, 0.6),
+    },
+  );
+
+  return rowIndex;
 }
 
 export async function GET(request: NextRequest) {
@@ -224,20 +217,47 @@ export async function GET(request: NextRequest) {
     const pdf = await PDFDocument.create();
     const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
     const regular = await pdf.embedFont(StandardFonts.Helvetica);
+
     if (!rows.length) {
       const page = pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-
-      drawPageHeader(page, bold, regular, resource, 1, 0, 0);
       page.drawText("No records available for export.", {
-        x: MARGIN_LEFT,
-        y: PAGE_HEIGHT - MARGIN_TOP - 80,
+        x: MARGIN,
+        y: PAGE_HEIGHT - MARGIN,
         size: 12,
         font: regular,
-        color: VALUE_COLOR,
+        color: TEXT_COLOR,
       });
     } else {
-      for (let index = 0; index < rows.length; index += 1) {
-        await addRecordPages(pdf, bold, regular, resource, rows[index] as Record<string, unknown>, index, rows.length);
+      const columns = Object.keys(rows[0] as Record<string, unknown>).filter(
+        (key) => !key.startsWith("_"),
+      );
+
+      const contentWidth = PAGE_WIDTH - 2 * MARGIN;
+      const columnWidths = getColumnWidths(columns, rows, regular, 9, contentWidth);
+
+      const rowsPerPage = Math.floor((PAGE_HEIGHT - 100) / ROW_HEIGHT);
+      const totalPages = Math.ceil(rows.length / rowsPerPage);
+
+      let rowIndex = 0;
+      for (let pageIndex = 0; pageIndex < totalPages; pageIndex++) {
+        const pageRows = rows.slice(
+          pageIndex * rowsPerPage,
+          (pageIndex + 1) * rowsPerPage,
+        ) as Record<string, unknown>[];
+
+        rowIndex = await addTablePage(
+          pdf,
+          bold,
+          regular,
+          resource,
+          columns,
+          columnWidths,
+          pageRows,
+          pageIndex * rowsPerPage,
+          pageIndex,
+          totalPages,
+          rows.length,
+        );
       }
     }
 
