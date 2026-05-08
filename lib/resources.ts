@@ -1,6 +1,7 @@
 import { hashPassword } from "@/lib/auth";
 import { defaultBranding } from "@/lib/brand";
 import { execute, queryRows } from "@/lib/db";
+import { applyDevelopmentEntryComputedValues } from "@/lib/development-entries";
 import { toNumeric } from "@/lib/format";
 import { canAccess, type PermissionAction } from "@/lib/permissions";
 import { sendAdvanceBookingNotifications } from "@/lib/services/notifications";
@@ -25,6 +26,8 @@ type ResourceConfig = {
     record: GenericRecord,
     session: SessionUser,
   ) => Promise<GenericRecord | void>;
+  hydrateRecord?: (record: GenericRecord) => Promise<GenericRecord> | GenericRecord;
+  hydrateList?: (records: GenericRecord[]) => Promise<GenericRecord[]> | GenericRecord[];
 };
 
 export class ResourceError extends Error {
@@ -89,6 +92,236 @@ function withCreator(input: GenericRecord, session: SessionUser) {
     ...input,
     created_by: session.userId,
   };
+}
+
+function asTrimmedString(value: unknown) {
+  return String(value ?? "").trim();
+}
+
+function buildDocumentFolderLabel(record: GenericRecord) {
+  const plotNumber = asTrimmedString(record.plot_number);
+  const buyerName = asTrimmedString(record.buyer_name ?? record.client_name);
+  const parts = [
+    plotNumber ? `Plot-${plotNumber}` : "",
+    buyerName ? `Buyer-${buyerName}` : "",
+  ].filter(Boolean);
+
+  return parts.join(" / ");
+}
+
+function buildDocumentFolderRecord(input: GenericRecord) {
+  const buyerName = asTrimmedString(input.buyer_name ?? input.client_name);
+
+  return {
+    ...input,
+    buyer_name: buyerName,
+    client_name: buyerName,
+    client_type: asTrimmedString(input.client_type) || "buyer",
+    folder_label: buildDocumentFolderLabel({
+      ...input,
+      buyer_name: buyerName,
+      client_name: buyerName,
+    }),
+    print_layout: asTrimmedString(input.print_layout) || "a4",
+    aadhaar_layout: asTrimmedString(input.aadhaar_layout) || "single-page",
+    page_orientation: asTrimmedString(input.page_orientation) || "portrait",
+    dpi_quality: asTrimmedString(input.dpi_quality) || "standard",
+    color_mode: asTrimmedString(input.color_mode) || "color",
+    export_type: asTrimmedString(input.export_type) || "pdf",
+    admin_lock: Boolean(input.admin_lock),
+    is_hidden: Boolean(input.is_hidden),
+  } satisfies GenericRecord;
+}
+
+async function hydrateDevelopmentEntries(records: GenericRecord[]) {
+  const siteIds = Array.from(
+    new Set(
+      records
+        .map((record) => Number(record.site_id ?? 0))
+        .filter((siteId) => siteId > 0),
+    ),
+  );
+
+  if (!siteIds.length) {
+    return records;
+  }
+
+  const placeholders = siteIds.map(() => "?").join(", ");
+  const sites = await queryRows<{ id: number; name: string | null }>(
+    `SELECT id, name FROM development_sites WHERE id IN (${placeholders})`,
+    siteIds,
+  );
+  const siteNameMap = new Map(
+    sites.map((site) => [Number(site.id), asTrimmedString(site.name)]),
+  );
+
+  return records.map((record) => ({
+    ...record,
+    site_name: siteNameMap.get(Number(record.site_id ?? 0)) ?? "",
+  }));
+}
+
+async function hydrateDocuments(records: GenericRecord[]) {
+  const folderIds = Array.from(
+    new Set(
+      records
+        .map((record) => Number(record.folder_id ?? 0))
+        .filter((folderId) => folderId > 0),
+    ),
+  );
+
+  if (!folderIds.length) {
+    return records;
+  }
+
+  const placeholders = folderIds.map(() => "?").join(", ");
+  const folders = await queryRows<{
+    id: number;
+    folder_code: string | null;
+    folder_label: string | null;
+    plot_number: string | null;
+    buyer_name: string | null;
+  }>(
+    `SELECT id, folder_code, folder_label, plot_number, buyer_name
+     FROM document_folders
+     WHERE id IN (${placeholders})`,
+    folderIds,
+  );
+  const folderMap = new Map(
+    folders.map((folder) => [
+      Number(folder.id),
+      {
+        folder_code: asTrimmedString(folder.folder_code),
+        folder_label:
+          asTrimmedString(folder.folder_label) ||
+          buildDocumentFolderLabel(folder as unknown as GenericRecord),
+      },
+    ]),
+  );
+
+  return records.map((record) => {
+    const folder = folderMap.get(Number(record.folder_id ?? 0));
+    return {
+      ...record,
+      folder_code: folder?.folder_code ?? "",
+      folder_label: folder?.folder_label ?? "",
+    };
+  });
+}
+
+async function resolveDevelopmentSiteId(siteName: string, input: GenericRecord) {
+  const existing = await queryRows<{ id: number }>(
+    "SELECT id FROM development_sites WHERE LOWER(name) = LOWER(?) LIMIT 1",
+    [siteName],
+  );
+
+  if (existing[0]?.id) {
+    const siteId = Number(existing[0].id);
+    const location = asTrimmedString(input.work_location);
+
+    if (location) {
+      await execute(
+        `UPDATE development_sites
+         SET location = COALESCE(NULLIF(location, ''), ?)
+         WHERE id = ?`,
+        [location, siteId],
+      );
+    }
+
+    return siteId;
+  }
+
+  const result = await execute(
+    `INSERT INTO development_sites (name, location, status, notes)
+     VALUES (?, ?, 'active', ?)`,
+    [
+      siteName,
+      asTrimmedString(input.work_location) || null,
+      asTrimmedString(input.notes) || null,
+    ],
+  );
+
+  return result.insertId;
+}
+
+function requireNonEmpty(value: unknown, label: string) {
+  if (!asTrimmedString(value)) {
+    throw new ResourceError(`${label} is required.`);
+  }
+}
+
+function validateDevelopmentEntry(input: GenericRecord) {
+  const category = asTrimmedString(input.category).toLowerCase();
+  requireNonEmpty(input.site_name, "Site name");
+  requireNonEmpty(category, "Category");
+
+  if (category === "jcb") {
+    requireNonEmpty(input.jcb_number, "JCB number");
+    requireNonEmpty(input.owner_name, "Owner name");
+    requireNonEmpty(input.start_time, "Start time");
+    requireNonEmpty(input.stop_time, "Stop time");
+    requireNonEmpty(input.work_location, "Work location");
+    if (toNumeric(input.rate_per_hour) <= 0) {
+      throw new ResourceError("Rate per hour must be greater than 0.");
+    }
+  }
+
+  if (category === "tractor") {
+    requireNonEmpty(input.tractor_number, "Tractor number");
+    requireNonEmpty(input.owner_name, "Tractor owner name");
+    requireNonEmpty(input.mobile_number, "Mobile number");
+    requireNonEmpty(input.rent_type, "Rent type");
+    requireNonEmpty(input.work_location, "Work location");
+
+    if (asTrimmedString(input.rent_type) === "daily") {
+      requireNonEmpty(input.start_date, "Start date");
+      requireNonEmpty(input.end_date, "End date");
+      if (toNumeric(input.rate_per_day) <= 0) {
+        throw new ResourceError("Rate per day must be greater than 0.");
+      }
+    } else {
+      requireNonEmpty(input.start_time, "Start time");
+      requireNonEmpty(input.stop_time, "Stop time");
+      if (toNumeric(input.rate_per_hour) <= 0) {
+        throw new ResourceError("Rate per hour must be greater than 0.");
+      }
+    }
+  }
+
+  if (category === "damper") {
+    requireNonEmpty(input.damper_number, "Damper number");
+    requireNonEmpty(input.owner_name, "Owner name");
+    requireNonEmpty(input.driver_name, "Driver name");
+    requireNonEmpty(input.mobile_number, "Mobile number");
+    requireNonEmpty(input.amount_mode, "Rent type");
+    requireNonEmpty(input.work_type, "Work type");
+    requireNonEmpty(input.work_location, "Site location");
+
+    if (asTrimmedString(input.amount_mode) === "per_trip") {
+      if (toNumeric(input.rate_per_trip) <= 0) {
+        throw new ResourceError("Rate per trip must be greater than 0.");
+      }
+      if (toNumeric(input.total_trips) <= 0) {
+        throw new ResourceError("Total trips must be greater than 0.");
+      }
+    }
+
+    if (asTrimmedString(input.amount_mode) === "per_hour") {
+      requireNonEmpty(input.start_time, "Start time");
+      requireNonEmpty(input.stop_time, "Stop time");
+      if (toNumeric(input.rate_per_hour) <= 0) {
+        throw new ResourceError("Rate per hour must be greater than 0.");
+      }
+    }
+
+    if (asTrimmedString(input.amount_mode) === "daily") {
+      requireNonEmpty(input.start_date, "Start date");
+      requireNonEmpty(input.end_date, "End date");
+      if (toNumeric(input.rate_per_day) <= 0) {
+        throw new ResourceError("Rate per day must be greater than 0.");
+      }
+    }
+  }
 }
 
 const resourceConfigs: Record<ResourceName, ResourceConfig> = {
@@ -259,6 +492,7 @@ const resourceConfigs: Record<ResourceName, ResourceConfig> = {
       "plot_id",
       "project_id",
       "customer_name",
+      "seller_name",
       "customer_phone",
       "customer_email",
       "village",
@@ -670,9 +904,44 @@ const resourceConfigs: Record<ResourceName, ResourceConfig> = {
     table: "development_entries",
     orderBy: "entry_date DESC, created_at DESC",
     writableFields: [
+      "site_name",
       "site_id",
-      "work_type",
       "category",
+      "jcb_number",
+      "tractor_number",
+      "damper_number",
+      "owner_name",
+      "driver_name",
+      "mobile_number",
+      "rent_type",
+      "amount_mode",
+      "start_date",
+      "end_date",
+      "start_time",
+      "stop_time",
+      "total_days",
+      "total_hours",
+      "total_trips",
+      "rate_per_day",
+      "rate_per_hour",
+      "rate_per_trip",
+      "advance_diesel",
+      "diesel_given",
+      "diesel_cost",
+      "advance_paid",
+      "remaining_amount",
+      "payment_status",
+      "work_type",
+      "construction_material",
+      "work_location",
+      "gps_location",
+      "loading_point",
+      "unloading_point",
+      "work_description",
+      "working_photo_url",
+      "before_photo_url",
+      "after_photo_url",
+      "signature_url",
       "description",
       "quantity",
       "rate",
@@ -683,37 +952,86 @@ const resourceConfigs: Record<ResourceName, ResourceConfig> = {
       "entry_date",
       "notes",
     ],
-    requiredFields: ["site_id", "work_type", "category", "description"],
-    createTransform(input, session) {
-      const quantity = toNumeric(input.quantity);
-      const rate = toNumeric(input.rate);
-      const amount = toNumeric(input.amount) || quantity * rate;
+    requiredFields: ["site_name", "category"],
+    async createTransform(input, session) {
+      const computed = applyDevelopmentEntryComputedValues(input);
+      validateDevelopmentEntry(computed);
+
+      const siteName = asTrimmedString(computed.site_name);
+      const siteId = await resolveDevelopmentSiteId(siteName, computed);
+      const persistable = { ...computed };
+      delete persistable.site_name;
 
       return withCreator(
         {
-          ...input,
-          quantity,
-          rate,
-          amount,
-          entry_date: input.entry_date ?? new Date().toISOString().slice(0, 10),
+          ...persistable,
+          site_id: siteId,
+          work_type: asTrimmedString(computed.work_type) || asTrimmedString(computed.category),
+          vendor_name: asTrimmedString(computed.vendor_name) || asTrimmedString(computed.owner_name),
         },
         session,
       );
     },
-    updateTransform(input, session) {
+    async updateTransform(input, session) {
       return resourceConfigs["development-entries"].createTransform?.(input, session) ?? input;
+    },
+    hydrateList(records) {
+      return hydrateDevelopmentEntries(records);
+    },
+    hydrateRecord(record) {
+      return hydrateDevelopmentEntries([record]).then((records) => records[0] ?? record);
     },
   },
   "document-folders": {
     table: "document_folders",
     orderBy: "created_at DESC",
-    writableFields: ["client_name", "client_type", "project_id", "notes"],
-    requiredFields: ["client_name"],
+    writableFields: [
+      "client_name",
+      "client_type",
+      "project_id",
+      "folder_code",
+      "folder_label",
+      "plot_number",
+      "buyer_name",
+      "buyer_mobile_number",
+      "buyer_aadhaar_number",
+      "buyer_pan_number",
+      "seller_name",
+      "seller_mobile_number",
+      "seller_aadhaar_number",
+      "seller_pan_number",
+      "witness_1_name",
+      "witness_1_aadhaar_number",
+      "witness_2_name",
+      "witness_2_aadhaar_number",
+      "identifier_name",
+      "identifier_mobile_number",
+      "identifier_aadhaar_number",
+      "print_layout",
+      "aadhaar_layout",
+      "page_orientation",
+      "dpi_quality",
+      "color_mode",
+      "export_type",
+      "admin_lock",
+      "is_hidden",
+      "notes",
+    ],
+    requiredFields: ["project_id", "plot_number", "buyer_name"],
     createTransform(input, session) {
-      return withCreator(input, session);
+      return withCreator(buildDocumentFolderRecord(input), session);
     },
     updateTransform(input, session) {
       return resourceConfigs["document-folders"].createTransform?.(input, session) ?? input;
+    },
+    async afterCreate(record) {
+      const id = Number(record.id ?? 0);
+      const code = `DAST-${new Date().getFullYear()}-${String(id).padStart(4, "0")}`;
+      await execute(
+        "UPDATE document_folders SET folder_code = ? WHERE id = ?",
+        [code, id],
+      );
+      return getResourceById("document-folders", id);
     },
   },
   documents: {
@@ -721,6 +1039,9 @@ const resourceConfigs: Record<ResourceName, ResourceConfig> = {
     orderBy: "uploaded_at DESC",
     writableFields: [
       "folder_id",
+      "section",
+      "party_name",
+      "sort_order",
       "title",
       "document_type",
       "file_name",
@@ -730,6 +1051,7 @@ const resourceConfigs: Record<ResourceName, ResourceConfig> = {
       "uploaded_by",
     ],
     requiredFields: ["folder_id", "title", "file_name", "file_path"],
+    filterableFields: ["folder_id", "section", "document_type"],
     createTransform(input, session) {
       return {
         ...input,
@@ -741,6 +1063,12 @@ const resourceConfigs: Record<ResourceName, ResourceConfig> = {
         ...input,
         uploaded_by: session.userId,
       };
+    },
+    hydrateList(records) {
+      return hydrateDocuments(records);
+    },
+    hydrateRecord(record) {
+      return hydrateDocuments([record]).then((records) => records[0] ?? record);
     },
   },
   reminders: {
@@ -803,7 +1131,17 @@ export async function listResource(resource: string, searchParams?: URLSearchPar
   } ORDER BY ${config.orderBy} LIMIT ?`;
 
   const rows = await queryRows<GenericRecord>(sql, [...values, limit]);
-  return rows.map((row) => sanitizeRecord(row, config));
+  const sanitized = rows.map((row) => sanitizeRecord(row, config));
+
+  if (config.hydrateList) {
+    return config.hydrateList(sanitized);
+  }
+
+  if (config.hydrateRecord) {
+    return Promise.all(sanitized.map((row) => config.hydrateRecord!(row)));
+  }
+
+  return sanitized;
 }
 
 export async function getResourceById(resource: string, id: number) {
@@ -819,7 +1157,18 @@ export async function getResourceById(resource: string, id: number) {
     throw new ResourceError("Record not found.", 404);
   }
 
-  return sanitizeRecord(row, config);
+  const sanitized = sanitizeRecord(row, config);
+
+  if (config.hydrateRecord) {
+    return config.hydrateRecord(sanitized);
+  }
+
+  if (config.hydrateList) {
+    const hydrated = await config.hydrateList([sanitized]);
+    return hydrated[0] ?? sanitized;
+  }
+
+  return sanitized;
 }
 
 export async function createResource(

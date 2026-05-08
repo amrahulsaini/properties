@@ -45,6 +45,8 @@ export async function GET(request: Request) {
         partyName: String(row.customer_name ?? ""),
         partyPhone: String(row.customer_phone ?? ""),
         partyEmail: String(row.customer_email ?? ""),
+        secondaryPartyLabel: "Seller",
+        secondaryPartyName: String(row.seller_name ?? ""),
         village: String(row.village ?? ""),
         surveyNumber: String(row.survey_number ?? ""),
         area: `${row.area_sqft ?? 0} sq.ft.`,

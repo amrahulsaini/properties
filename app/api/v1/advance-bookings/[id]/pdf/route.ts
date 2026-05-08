@@ -33,6 +33,8 @@ export async function GET(
       partyName: String(booking.customer_name ?? ""),
       partyPhone: String(booking.customer_phone ?? ""),
       partyEmail: String(booking.customer_email ?? ""),
+      secondaryPartyLabel: "Seller",
+      secondaryPartyName: String(booking.seller_name ?? ""),
       village: String(booking.village ?? ""),
       surveyNumber: String(booking.survey_number ?? ""),
       area: `${booking.area_sqft ?? 0} sq.ft.`,

@@ -9,6 +9,7 @@ export type FieldType =
   | "select"
   | "textarea"
   | "date"
+  | "time"
   | "datetime-local"
   | "checkbox" | "project_select"
   | "image"
@@ -83,6 +84,16 @@ export interface SelectOption {
   value: string;
 }
 
+export type FieldConditionValue =
+  | string
+  | number
+  | boolean
+  | Array<string | number | boolean>;
+
+export type FieldVisibilityRule =
+  | Record<string, FieldConditionValue>
+  | Array<Record<string, FieldConditionValue>>;
+
 export interface ModuleField {
   key: string;
   label: string;
@@ -92,6 +103,9 @@ export interface ModuleField {
   placeholder?: string;
   options?: SelectOption[];
   hint?: string;
+  readOnly?: boolean;
+  accept?: string;
+  showWhen?: FieldVisibilityRule;
 }
 
 export interface ModuleColumn {
@@ -107,7 +121,7 @@ export interface ModuleSummary {
   prefix?: string;
   suffix?: string;
   tone?: SummaryTone;
-  filter?: Record<string, any>;
+  filter?: Record<string, unknown>;
 }
 
 export interface ModuleConfig {

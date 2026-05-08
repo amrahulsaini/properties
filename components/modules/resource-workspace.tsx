@@ -4,11 +4,11 @@ import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/data-table";
 import { Dialog } from "@/components/ui/dialog";
-import { Notice } from "@/components/ui/notice";
 import { StatCard } from "@/components/ui/stat-card";
+import { applyDevelopmentEntryComputedValues } from "@/lib/development-entries";
 import { formatCurrency, formatNumber } from "@/lib/format";
 import type { GenericRecord, ModuleConfig, ModuleField } from "@/lib/types";
-import { FileText, MessageCircleMore, Search, X, Building2, TrendingUp, TrendingDown } from "lucide-react";
+import { FileText, MessageCircleMore, Search, X, Building2 } from "lucide-react";
 
 interface ResourceWorkspaceProps {
   module: ModuleConfig;
@@ -90,6 +90,65 @@ function createInitialState(fields: ModuleField[]) {
   }, {});
 }
 
+function toFormRecord(input: GenericRecord) {
+  return Object.fromEntries(
+    Object.entries(input).map(([key, value]) => {
+      if (typeof value === "boolean" || typeof value === "number") {
+        return [key, value];
+      }
+
+      return [key, value == null ? "" : String(value)];
+    }),
+  ) as Record<string, string | number | boolean>;
+}
+
+function applyModuleRules(
+  module: ModuleConfig,
+  form: Record<string, string | number | boolean>,
+) {
+  if (module.slug === "development-sites") {
+    return toFormRecord(applyDevelopmentEntryComputedValues(form));
+  }
+
+  return form;
+}
+
+function matchesExpectedValue(
+  expected: unknown,
+  current: string | number | boolean,
+): boolean {
+  if (Array.isArray(expected)) {
+    return expected.some((value) => matchesExpectedValue(value, current));
+  }
+
+  if (typeof expected === "boolean") {
+    return Boolean(current) === expected;
+  }
+
+  if (typeof expected === "number") {
+    return Number(current) === expected;
+  }
+
+  return String(current ?? "") === String(expected ?? "");
+}
+
+function isFieldVisible(
+  field: ModuleField,
+  form: Record<string, string | number | boolean>,
+) {
+  if (!field.showWhen) {
+    return true;
+  }
+
+  const rules = Array.isArray(field.showWhen) ? field.showWhen : [field.showWhen];
+
+  return rules.some((rule) =>
+    Object.entries(rule).every(([key, expected]) =>
+      matchesExpectedValue(expected, form[key] ?? ""),
+    ),
+  );
+}
+
 function formatInputValue(field: ModuleField, value: unknown) {
   if (field.type === "checkbox") {
     return Boolean(value);
@@ -105,6 +164,10 @@ function formatInputValue(field: ModuleField, value: unknown) {
 
   if (field.type === "date") {
     return String(value).slice(0, 10);
+  }
+
+  if (field.type === "time") {
+    return String(value).slice(0, 5);
   }
 
   return String(value);
@@ -157,7 +220,7 @@ function computeSummary(summary: ModuleConfig["summaries"][number], rows: Generi
       0,
     );
 
-    return summary.prefix ? formatCurrency(total) : formatNumber(total);
+    return summary.prefix ? `${summary.prefix} ${formatNumber(total)}` : formatNumber(total);
   }
 
   if (summary.type === "computed") {
@@ -179,7 +242,7 @@ const hasProjectSelect = (fields: ModuleField[]) =>
 
 export function ResourceWorkspace({ module }: ResourceWorkspaceProps) {
   const [rows, setRows] = useState<GenericRecord[]>([]);
-  const [form, setForm] = useState(createInitialState(module.fields));
+  const [form, setForm] = useState(() => applyModuleRules(module, createInitialState(module.fields)));
   const [editingId, setEditingId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -196,6 +259,14 @@ export function ResourceWorkspace({ module }: ResourceWorkspaceProps) {
   // Instant search state — pure client-side, zero latency
   const [searchQuery, setSearchQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const visibleFields = useMemo(
+    () => module.fields.filter((field) => isFieldVisible(field, form)),
+    [module.fields, form],
+  );
+
+  function updateFieldValue(key: string, value: string | number | boolean) {
+    setForm((current) => applyModuleRules(module, { ...current, [key]: value }));
+  }
 
   // Load project names once for modules that use project_select
   useEffect(() => {
@@ -348,13 +419,13 @@ export function ResourceWorkspace({ module }: ResourceWorkspaceProps) {
           const params = new URL(window.location.href).searchParams;
           const param = params.get("project_id") || params.get("project");
           if (param) {
-            setForm((c) => ({ ...c, project_id: Number(param) }));
+            setForm((c) => applyModuleRules(module, { ...c, project_id: Number(param) }));
             return;
           }
 
           const saved = localStorage.getItem("ps:defaultProjectId");
           if (saved) {
-            setForm((c) => ({ ...c, project_id: Number(saved) }));
+            setForm((c) => applyModuleRules(module, { ...c, project_id: Number(saved) }));
             return;
           }
         }
@@ -362,15 +433,15 @@ export function ResourceWorkspace({ module }: ResourceWorkspaceProps) {
         const resp = await fetch("/api/v1/projects?limit=1");
         const payload = await resp.json();
         if (resp.ok && payload.data && payload.data[0]) {
-          setForm((c) => ({ ...c, project_id: Number(payload.data[0].id) }));
+          setForm((c) => applyModuleRules(module, { ...c, project_id: Number(payload.data[0].id) }));
         }
-      } catch (e) {
+      } catch {
         // ignore
       }
     }
 
     void findDefault();
-  }, [module.fields, editingId]);
+  }, [editingId, form, module]);
 
   async function handleFileUpload(file: File, key: string) {
     setUploadingField(key);
@@ -414,7 +485,7 @@ export function ResourceWorkspace({ module }: ResourceWorkspaceProps) {
 
   function resetForm() {
     setEditingId(null);
-    setForm(createInitialState(module.fields));
+    setForm(applyModuleRules(module, createInitialState(module.fields)));
     setProjectCodeStatus("idle");
   }
 
@@ -426,7 +497,7 @@ export function ResourceWorkspace({ module }: ResourceWorkspaceProps) {
     }
 
     setEditingId(Number(row.id));
-    setForm(next);
+    setForm(applyModuleRules(module, next));
     setProjectCodeStatus("idle");
   }
 
@@ -626,7 +697,7 @@ export function ResourceWorkspace({ module }: ResourceWorkspaceProps) {
 
           <form className="space-y-4" onSubmit={handleSubmit}>
             <div className="grid gap-4 md:grid-cols-2">
-              {module.fields.map((field) => (
+              {visibleFields.map((field) => (
                 <label
                   key={field.key}
                   className={field.type === "textarea" ? "md:col-span-2" : ""}
@@ -637,24 +708,14 @@ export function ResourceWorkspace({ module }: ResourceWorkspaceProps) {
                   </span>
                   {field.type === "project_select" ? (
                     <ProjectSelectField
-                      onChange={(nextValue) =>
-                        setForm((current) => ({
-                          ...current,
-                          [field.key]: nextValue,
-                        }))
-                      }
+                      onChange={(nextValue) => updateFieldValue(field.key, nextValue)}
                       required={field.required}
                       value={form[field.key]}
                     />
                   ) : field.type === "select" ? (
                     <select
                       className="w-full rounded-2xl border border-line bg-white px-4 py-3 outline-none transition focus:border-accent"
-                      onChange={(event) =>
-                        setForm((current) => ({
-                          ...current,
-                          [field.key]: event.target.value,
-                        }))
-                      }
+                      onChange={(event) => updateFieldValue(field.key, event.target.value)}
                       required={field.required}
                       value={String(form[field.key] ?? "")}
                     >
@@ -668,13 +729,9 @@ export function ResourceWorkspace({ module }: ResourceWorkspaceProps) {
                   ) : field.type === "textarea" ? (
                     <textarea
                       className="min-h-28 w-full rounded-2xl border border-line bg-white px-4 py-3 outline-none transition focus:border-accent"
-                      onChange={(event) =>
-                        setForm((current) => ({
-                          ...current,
-                          [field.key]: event.target.value,
-                        }))
-                      }
+                      onChange={(event) => updateFieldValue(field.key, event.target.value)}
                       placeholder={field.placeholder}
+                      readOnly={field.readOnly}
                       required={field.required}
                       value={String(form[field.key] ?? "")}
                     />
@@ -682,12 +739,7 @@ export function ResourceWorkspace({ module }: ResourceWorkspaceProps) {
                     <div className="flex h-[52px] items-center rounded-2xl border border-line bg-white px-4">
                       <input
                         checked={Boolean(form[field.key])}
-                        onChange={(event) =>
-                          setForm((current) => ({
-                            ...current,
-                            [field.key]: event.target.checked,
-                          }))
-                        }
+                        onChange={(event) => updateFieldValue(field.key, event.target.checked)}
                         type="checkbox"
                       />
                     </div>
@@ -711,7 +763,7 @@ export function ResourceWorkspace({ module }: ResourceWorkspaceProps) {
                               className="absolute inset-0 flex items-center justify-center bg-black/50 text-xs font-bold text-white opacity-0 transition-opacity group-hover:opacity-100"
                               onClick={(event) => {
                                 event.preventDefault();
-                                setForm((current) => ({ ...current, [field.key]: "" }));
+                                updateFieldValue(field.key, "");
                               }}
                               type="button"
                             >
@@ -732,7 +784,7 @@ export function ResourceWorkspace({ module }: ResourceWorkspaceProps) {
                         )}
                       </div>
                       <input
-                        accept="image/*"
+                        accept={field.accept ?? (field.type === "image" ? "image/*" : undefined)}
                         className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
                         onChange={(e) => {
                           if (e.target.files && e.target.files[0]) {
@@ -754,16 +806,14 @@ export function ResourceWorkspace({ module }: ResourceWorkspaceProps) {
                             : undefined
                         }
                         onChange={(event) => {
-                          setForm((current) => ({
-                            ...current,
-                            [field.key]: event.target.value,
-                          }));
+                          updateFieldValue(field.key, event.target.value);
 
                           if (module.slug === "projects" && field.key === "code") {
                             setProjectCodeStatus("idle");
                           }
                         }}
                         placeholder={field.placeholder}
+                        readOnly={field.readOnly}
                         required={field.required}
                         step={field.step}
                         type={field.type}
@@ -974,23 +1024,46 @@ export function ResourceWorkspace({ module }: ResourceWorkspaceProps) {
                 <DataTable
                   columns={displayColumns}
                   getExtraAction={(row) => {
-                    if (module.slug === "advance-bookings" || module.slug === "advance-agreements") {
-                      const pdfUrl =
-                        module.slug === "advance-bookings"
-                          ? `/api/v1/advance-bookings/${row.id}/pdf`
-                          : `/api/v1/advance-agreements/${row.id}/pdf`;
+                    const origin = typeof window !== "undefined"
+                      ? window.location.origin
+                      : (typeof process !== "undefined" && process.env.NEXT_PUBLIC_APP_URL
+                        ? process.env.NEXT_PUBLIC_APP_URL
+                        : "https://yourdomain.com");
+
+                    if (
+                      module.slug === "advance-bookings" ||
+                      module.slug === "advance-agreements" ||
+                      module.slug === "development-sites" ||
+                      module.slug === "documents"
+                    ) {
+                      const pdfUrl = module.slug === "advance-bookings"
+                        ? `/api/v1/advance-bookings/${row.id}/pdf`
+                        : module.slug === "advance-agreements"
+                          ? `/api/v1/advance-agreements/${row.id}/pdf`
+                          : module.slug === "development-sites"
+                            ? `/api/v1/development-entries/${row.id}/pdf`
+                            : `/api/v1/document-folders/${row.id}/pdf`;
+
                       const phone = String(
                         module.slug === "advance-bookings"
                           ? row.customer_phone ?? ""
-                          : row.owner_phone ?? row.customer_phone ?? "",
+                          : module.slug === "advance-agreements"
+                            ? row.owner_phone ?? row.customer_phone ?? ""
+                            : module.slug === "development-sites"
+                              ? row.mobile_number ?? ""
+                              : row.buyer_mobile_number ?? "",
                       ).replace(/\D/g, "");
-                      const origin = typeof window !== "undefined"
-                        ? window.location.origin
-                        : (typeof process !== "undefined" && process.env.NEXT_PUBLIC_APP_URL
-                          ? process.env.NEXT_PUBLIC_APP_URL
-                          : "https://yourdomain.com");
+
+                      const messageTitle = module.slug === "advance-bookings"
+                        ? "Advance Booking"
+                        : module.slug === "advance-agreements"
+                          ? "Advance Agreement"
+                          : module.slug === "development-sites"
+                            ? "Development Work Slip"
+                            : "Dast Document Pack";
+
                       const fullPdfUrl = `${origin}${pdfUrl}`;
-                      const whatsappMessage = `Your ${module.slug === "advance-bookings" ? "Advance Booking" : "Advance Agreement"} PDF:\n${fullPdfUrl}`;
+                      const whatsappMessage = `Your ${messageTitle} PDF:\n${fullPdfUrl}`;
 
                       return (
                         <div className="flex flex-wrap items-center gap-2">

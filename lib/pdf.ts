@@ -10,6 +10,8 @@ interface PdfPayload {
   partyName: string;
   partyPhone?: string | null;
   partyEmail?: string | null;
+  secondaryPartyLabel?: string | null;
+  secondaryPartyName?: string | null;
   village: string;
   surveyNumber: string;
   area: string;
@@ -723,6 +725,21 @@ async function createBaseDocument(payload: PdfPayload) {
     y: y - 60,
     size: 12,
     font: bold,
+    color: PRIMARY_TEXT,
+  });
+
+  page.drawText((payload.secondaryPartyLabel || "SECOND PARTY").toUpperCase(), {
+    x: MARGIN_LEFT + COL_WIDTH + 15,
+    y: y - 42,
+    size: 8,
+    font: bold,
+    color: SECONDARY_TEXT,
+  });
+  page.drawText(payload.secondaryPartyName || "â€”", {
+    x: MARGIN_LEFT + COL_WIDTH + 15,
+    y: y - 60,
+    size: 11,
+    font: regular,
     color: PRIMARY_TEXT,
   });
 
