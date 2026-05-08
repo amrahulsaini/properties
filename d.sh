@@ -43,11 +43,20 @@ fi
 # DETERMINE TARGET BRANCH
 ########################################
 
-TARGET_BRANCH="${TARGET_BRANCH:-feat/prefill-projectid}"
+TARGET_BRANCH="${TARGET_BRANCH:-master}"
 CURRENT_BRANCH="$(git branch --show-current 2>/dev/null || true)"
 
 if [[ -z "${CURRENT_BRANCH}" ]]; then
   CURRENT_BRANCH="${TARGET_BRANCH}"
+fi
+
+########################################
+# CLEAR LOCAL CONFLICTING SCRIPT COPY
+########################################
+
+if [[ -f d.sh ]] && ! git ls-files --error-unmatch d.sh > /dev/null 2>&1; then
+  echo "🧹 Removing leftover untracked d.sh before sync..."
+  rm -f d.sh
 fi
 
 ########################################
@@ -61,11 +70,11 @@ echo "📥 Deploying branch: ${TARGET_BRANCH}"
 
 if git show-ref --verify --quiet "refs/remotes/origin/${TARGET_BRANCH}"; then
   git checkout -B "${TARGET_BRANCH}" "origin/${TARGET_BRANCH}"
-  git pull --ff-only origin "${TARGET_BRANCH}"
+  git reset --hard "origin/${TARGET_BRANCH}"
 else
   echo "⚠️ Branch ${TARGET_BRANCH} not found on origin. Falling back to current branch: ${CURRENT_BRANCH}"
   git checkout -B "${CURRENT_BRANCH}" "origin/${CURRENT_BRANCH}" 2>/dev/null || true
-  git pull --ff-only origin "${CURRENT_BRANCH}"
+  git reset --hard "origin/${CURRENT_BRANCH}"
 fi
 
 ########################################
