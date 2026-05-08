@@ -310,6 +310,214 @@ function drawTermsSection(
   return y - 18 - boxHeight - 20;
 }
 
+function drawSignatureSection(page: any, bold: any, regular: any) {
+  const sigY = 110;
+  const sigBoxHeight = 70;
+  const sigBoxWidth = (CONTENT_WIDTH - 15) / 2;
+
+  page.drawText("AUTHORIZED SIGNATURES", {
+    x: MARGIN_LEFT,
+    y: sigY + 20,
+    size: 11,
+    font: bold,
+    color: PRIMARY_TEXT,
+  });
+
+  page.drawRectangle({
+    x: MARGIN_LEFT,
+    y: sigY - sigBoxHeight,
+    width: sigBoxWidth,
+    height: sigBoxHeight,
+    color: GRID_BG,
+    borderColor: BORDER_COLOR,
+    borderWidth: 1,
+  });
+
+  page.drawLine({
+    start: { x: MARGIN_LEFT + 10, y: sigY - 50 },
+    end: { x: MARGIN_LEFT + sigBoxWidth - 10, y: sigY - 50 },
+    thickness: 1,
+    color: BORDER_COLOR,
+  });
+
+  page.drawText("Customer / Owner", {
+    x: MARGIN_LEFT + 10,
+    y: sigY - 60,
+    size: 9,
+    font: regular,
+    color: SECONDARY_TEXT,
+  });
+
+  page.drawRectangle({
+    x: MARGIN_LEFT + sigBoxWidth + 15,
+    y: sigY - sigBoxHeight,
+    width: sigBoxWidth,
+    height: sigBoxHeight,
+    color: GRID_BG,
+    borderColor: BORDER_COLOR,
+    borderWidth: 1,
+  });
+
+  page.drawLine({
+    start: { x: MARGIN_LEFT + sigBoxWidth + 15 + 10, y: sigY - 50 },
+    end: { x: MARGIN_LEFT + sigBoxWidth + 15 + sigBoxWidth - 10, y: sigY - 50 },
+    thickness: 1,
+    color: BORDER_COLOR,
+  });
+
+  page.drawText("Company Authorized", {
+    x: MARGIN_LEFT + sigBoxWidth + 15 + 10,
+    y: sigY - 60,
+    size: 9,
+    font: regular,
+    color: SECONDARY_TEXT,
+  });
+
+  return { sigY, sigBoxHeight, sigBoxWidth };
+}
+
+function drawFooter(page: any, regular: any) {
+  const today = new Date().toLocaleDateString("en-IN", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+
+  page.drawText(`Generated on: ${today}`, {
+    x: MARGIN_LEFT,
+    y: 20,
+    size: 8,
+    font: regular,
+    color: SECONDARY_TEXT,
+  });
+}
+
+async function drawTermsAndSignaturesPage(
+  pdf: PDFDocument,
+  payload: PdfPayload,
+  bold: any,
+  regular: any,
+) {
+  const page = pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+  let y = PAGE_HEIGHT - 35;
+
+  page.drawText("TERMS, CONDITIONS & SIGNATURES", {
+    x: MARGIN_LEFT,
+    y,
+    size: 16,
+    font: bold,
+    color: ACCENT_COLOR,
+  });
+
+  page.drawLine({
+    start: { x: MARGIN_LEFT, y: y - 8 },
+    end: { x: PAGE_WIDTH - MARGIN_RIGHT, y: y - 8 },
+    thickness: 2,
+    color: ACCENT_COLOR,
+  });
+
+  if (payload.partyPhotoUrl) {
+    try {
+      const image = await loadImageBytes(payload.partyPhotoUrl);
+      if (image) {
+        let img: any = null;
+        if (
+          image.contentType.includes("png") ||
+          String(payload.partyPhotoUrl).toLowerCase().endsWith(".png")
+        ) {
+          img = await pdf.embedPng(image.bytes);
+        } else {
+          img = await pdf.embedJpg(image.bytes);
+        }
+
+        const photoSize = 65;
+        page.drawRectangle({
+          x: PAGE_WIDTH - MARGIN_RIGHT - photoSize - 1,
+          y: PAGE_HEIGHT - 35 - 70 - 1,
+          width: photoSize,
+          height: photoSize,
+          borderColor: ACCENT_COLOR,
+          borderWidth: 1.5,
+        });
+
+        page.drawImage(img, {
+          x: PAGE_WIDTH - MARGIN_RIGHT - photoSize,
+          y: PAGE_HEIGHT - 35 - 70,
+          width: photoSize,
+          height: photoSize,
+        });
+      }
+    } catch {
+      // ignore image embedding errors
+    }
+  }
+
+  y -= 28;
+
+  if (payload.conditions) {
+    y = drawTextSection(page, "ADDITIONAL CONDITIONS", payload.conditions, y, bold, regular);
+  }
+
+  y = drawTermsSection(page, "DEVELOPER TERMS", DEVELOPER_TERMS, y, bold, regular);
+  y = drawTermsSection(page, "TERMS & CONDITIONS", BUYER_TERMS, y, bold, regular);
+
+  drawSignatureSection(page, bold, regular);
+
+  if (payload.customerSignatureUrl) {
+    try {
+      const image = await loadImageBytes(payload.customerSignatureUrl);
+      if (image) {
+        let sigImg: any = null;
+        if (
+          image.contentType.includes("png") ||
+          String(payload.customerSignatureUrl).toLowerCase().endsWith(".png")
+        ) {
+          sigImg = await pdf.embedPng(image.bytes);
+        } else {
+          sigImg = await pdf.embedJpg(image.bytes);
+        }
+
+        page.drawImage(sigImg, {
+          x: MARGIN_LEFT + 10,
+          y: 62,
+          width: (CONTENT_WIDTH - 15) / 2 - 20,
+          height: 40,
+        });
+      }
+    } catch {
+      // ignore signature embedding errors
+    }
+  }
+
+  if (payload.companySignatureUrl) {
+    try {
+      const image = await loadImageBytes(payload.companySignatureUrl);
+      if (image) {
+        let sigImg: any = null;
+        if (
+          image.contentType.includes("png") ||
+          String(payload.companySignatureUrl).toLowerCase().endsWith(".png")
+        ) {
+          sigImg = await pdf.embedPng(image.bytes);
+        } else {
+          sigImg = await pdf.embedJpg(image.bytes);
+        }
+
+        page.drawImage(sigImg, {
+          x: MARGIN_LEFT + (CONTENT_WIDTH - 15) / 2 + 25,
+          y: 62,
+          width: (CONTENT_WIDTH - 15) / 2 - 20,
+          height: 40,
+        });
+      }
+    } catch {
+      // ignore signature embedding errors
+    }
+  }
+
+  drawFooter(page, regular);
+}
+
 async function createBaseDocument(payload: PdfPayload) {
   const pdf = await PDFDocument.create();
   const page = pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
@@ -678,183 +886,7 @@ async function createBaseDocument(payload: PdfPayload) {
 
   y -= transHeight + 20;
 
-  // ====== CONDITIONS SECTION (if present) ======
-  if (payload.conditions) {
-    y = drawTextSection(page, "ADDITIONAL CONDITIONS", payload.conditions, y, bold, regular);
-  }
-
-  y = drawTermsSection(page, "DEVELOPER TERMS", DEVELOPER_TERMS, y, bold, regular);
-  y = drawTermsSection(page, "TERMS & CONDITIONS", BUYER_TERMS, y, bold, regular);
-
-  // ====== PARTY PHOTO (top-right if available) ======
-  if (payload.partyPhotoUrl) {
-    try {
-      const image = await loadImageBytes(payload.partyPhotoUrl);
-      if (image) {
-        let img: any = null;
-        if (
-          image.contentType.includes("png") ||
-          String(payload.partyPhotoUrl).toLowerCase().endsWith(".png")
-        ) {
-          img = await pdf.embedPng(image.bytes);
-        } else {
-          img = await pdf.embedJpg(image.bytes);
-        }
-
-        const photoSize = 65;
-        page.drawRectangle({
-          x: PAGE_WIDTH - MARGIN_RIGHT - photoSize - 1,
-          y: PAGE_HEIGHT - 35 - 70 - 1,
-          width: photoSize,
-          height: photoSize,
-          borderColor: ACCENT_COLOR,
-          borderWidth: 1.5,
-        });
-
-        page.drawImage(img, {
-          x: PAGE_WIDTH - MARGIN_RIGHT - photoSize,
-          y: PAGE_HEIGHT - 35 - 70,
-          width: photoSize,
-          height: photoSize,
-        });
-      }
-    } catch {
-      // ignore image embedding errors
-    }
-  }
-
-  // ====== SIGNATURE SECTION ======
-  const sigY = 110;
-  const sigBoxHeight = 70;
-  const sigBoxWidth = (CONTENT_WIDTH - 15) / 2;
-
-  // Section label
-  page.drawText("AUTHORIZED SIGNATURES", {
-    x: MARGIN_LEFT,
-    y: sigY + 20,
-    size: 11,
-    font: bold,
-    color: PRIMARY_TEXT,
-  });
-
-  // Customer signature box
-  page.drawRectangle({
-    x: MARGIN_LEFT,
-    y: sigY - sigBoxHeight,
-    width: sigBoxWidth,
-    height: sigBoxHeight,
-    color: GRID_BG,
-    borderColor: BORDER_COLOR,
-    borderWidth: 1,
-  });
-
-  page.drawLine({
-    start: { x: MARGIN_LEFT + 10, y: sigY - 50 },
-    end: { x: MARGIN_LEFT + sigBoxWidth - 10, y: sigY - 50 },
-    thickness: 1,
-    color: BORDER_COLOR,
-  });
-
-  page.drawText("Customer / Owner", {
-    x: MARGIN_LEFT + 10,
-    y: sigY - 60,
-    size: 9,
-    font: regular,
-    color: SECONDARY_TEXT,
-  });
-
-  // Company signature box
-  page.drawRectangle({
-    x: MARGIN_LEFT + sigBoxWidth + 15,
-    y: sigY - sigBoxHeight,
-    width: sigBoxWidth,
-    height: sigBoxHeight,
-    color: GRID_BG,
-    borderColor: BORDER_COLOR,
-    borderWidth: 1,
-  });
-
-  page.drawLine({
-    start: { x: MARGIN_LEFT + sigBoxWidth + 15 + 10, y: sigY - 50 },
-    end: { x: MARGIN_LEFT + sigBoxWidth + 15 + sigBoxWidth - 10, y: sigY - 50 },
-    thickness: 1,
-    color: BORDER_COLOR,
-  });
-
-  page.drawText("Company Authorized", {
-    x: MARGIN_LEFT + sigBoxWidth + 15 + 10,
-    y: sigY - 60,
-    size: 9,
-    font: regular,
-    color: SECONDARY_TEXT,
-  });
-
-  // Embed signatures if available
-  if (payload.customerSignatureUrl) {
-    try {
-      const image = await loadImageBytes(payload.customerSignatureUrl);
-      if (image) {
-        let sigImg: any = null;
-        if (
-          image.contentType.includes("png") ||
-          String(payload.customerSignatureUrl).toLowerCase().endsWith(".png")
-        ) {
-          sigImg = await pdf.embedPng(image.bytes);
-        } else {
-          sigImg = await pdf.embedJpg(image.bytes);
-        }
-
-        page.drawImage(sigImg, {
-          x: MARGIN_LEFT + 10,
-          y: sigY - 48,
-          width: sigBoxWidth - 20,
-          height: 40,
-        });
-      }
-    } catch {
-      // ignore signature embedding errors
-    }
-  }
-
-  if (payload.companySignatureUrl) {
-    try {
-      const image = await loadImageBytes(payload.companySignatureUrl);
-      if (image) {
-        let sigImg: any = null;
-        if (
-          image.contentType.includes("png") ||
-          String(payload.companySignatureUrl).toLowerCase().endsWith(".png")
-        ) {
-          sigImg = await pdf.embedPng(image.bytes);
-        } else {
-          sigImg = await pdf.embedJpg(image.bytes);
-        }
-
-        page.drawImage(sigImg, {
-          x: MARGIN_LEFT + sigBoxWidth + 15 + 10,
-          y: sigY - 48,
-          width: sigBoxWidth - 20,
-          height: 40,
-        });
-      }
-    } catch {
-      // ignore signature embedding errors
-    }
-  }
-
-  // Footer with date generated
-  const today = new Date().toLocaleDateString("en-IN", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
-  page.drawText(`Generated on: ${today}`, {
-    x: MARGIN_LEFT,
-    y: 20,
-    size: 8,
-    font: regular,
-    color: SECONDARY_TEXT,
-  });
+  await drawTermsAndSignaturesPage(pdf, payload, bold, regular);
 
   return pdf;
 }
