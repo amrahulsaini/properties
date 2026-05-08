@@ -98,6 +98,13 @@ export function DashboardScreen() {
 
   return (
     <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold text-ink">Dashboard</h1>
+        <div className="rounded-full bg-green-100 px-4 py-2 text-sm font-medium text-green-800">
+          ✅ Deployed — {new Date().toLocaleDateString('en-IN')}
+        </div>
+      </div>
+
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Total Sales" tone="accent" value={formatCurrency(data.totals.sales)} />
         <StatCard
