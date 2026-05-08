@@ -26,7 +26,7 @@ function titleCase(value: string) {
     .replace(/\b\w/g, (match) => match.toUpperCase());
 }
 
-function formatValue(value: unknown) {
+function formatValue(value: unknown): string {
   if (value === null || value === undefined || value === "") {
     return "—";
   }
