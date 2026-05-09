@@ -95,6 +95,7 @@ export function applyDevelopmentEntryComputedValues(input: GenericRecord): Gener
   let quantity = toNumeric(input.quantity);
   let rate = toNumeric(input.rate);
   let amount = toNumeric(input.amount);
+  let totalSalary = toNumeric(input.total_salary);
 
   if (category === "jcb") {
     quantity = totalHours;
@@ -124,6 +125,12 @@ export function applyDevelopmentEntryComputedValues(input: GenericRecord): Gener
       rate = ratePerDay;
       amount = round2(totalDays * ratePerDay);
     }
+  } else if (category === "labor") {
+    const overtimeCharges = toNumeric(input.overtime_charges);
+    totalSalary = round2(totalDays * ratePerDay + overtimeCharges);
+    amount = totalSalary;
+    quantity = totalDays;
+    rate = ratePerDay;
   } else if (!amount) {
     amount = round2(quantity * rate);
   }
@@ -138,6 +145,7 @@ export function applyDevelopmentEntryComputedValues(input: GenericRecord): Gener
     quantity,
     rate,
     amount,
+    total_salary: category === "labor" ? totalSalary : toNumeric(input.total_salary),
     remaining_amount: remainingAmount,
     payment_status: derivePaymentStatus(amount, advancePaid, input.payment_status),
     entry_date: asString(input.entry_date) || new Date().toISOString().slice(0, 10),

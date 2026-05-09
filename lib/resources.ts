@@ -291,7 +291,6 @@ function validateDevelopmentEntry(input: GenericRecord) {
   if (category === "damper") {
     requireNonEmpty(input.damper_number, "Damper number");
     requireNonEmpty(input.owner_name, "Owner name");
-    requireNonEmpty(input.driver_name, "Driver name");
     requireNonEmpty(input.mobile_number, "Mobile number");
     requireNonEmpty(input.amount_mode, "Rent type");
     requireNonEmpty(input.work_type, "Work type");
@@ -951,6 +950,18 @@ const resourceConfigs: Record<ResourceName, ResourceConfig> = {
       "payment_mode",
       "entry_date",
       "notes",
+      // Labor-specific fields
+      "labor_name",
+      "labor_aadhaar_number",
+      "labor_work_type",
+      "attendance_type",
+      "overtime_charges",
+      "total_salary",
+      "food_expense",
+      "travel_expense",
+      "other_expense",
+      "labor_photo_url",
+      "aadhaar_upload_url",
     ],
     requiredFields: ["site_name", "category"],
     async createTransform(input, session) {
@@ -1002,11 +1013,17 @@ const resourceConfigs: Record<ResourceName, ResourceConfig> = {
       "seller_pan_number",
       "witness_1_name",
       "witness_1_aadhaar_number",
+      "witness_1_pan_number",
       "witness_2_name",
       "witness_2_aadhaar_number",
+      "witness_2_pan_number",
       "identifier_name",
       "identifier_mobile_number",
       "identifier_aadhaar_number",
+      "identifier_pan_number",
+      "identifier_2_name",
+      "identifier_2_aadhaar_number",
+      "identifier_2_pan_number",
       "print_layout",
       "aadhaar_layout",
       "page_orientation",

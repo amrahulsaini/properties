@@ -13,7 +13,8 @@ export type FieldType =
   | "datetime-local"
   | "checkbox" | "project_select"
   | "image"
-  | "file";
+  | "file"
+  | "gps_location";
 
 export type ColumnType =
   | "text"

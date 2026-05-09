@@ -8,7 +8,7 @@ import { StatCard } from "@/components/ui/stat-card";
 import { applyDevelopmentEntryComputedValues } from "@/lib/development-entries";
 import { formatCurrency, formatNumber } from "@/lib/format";
 import type { GenericRecord, ModuleConfig, ModuleField } from "@/lib/types";
-import { FileText, MessageCircleMore, Search, X, Building2 } from "lucide-react";
+import { FileText, MessageCircleMore, Search, X, Building2, MapPin, Loader2 } from "lucide-react";
 
 interface ResourceWorkspaceProps {
   module: ModuleConfig;
@@ -80,6 +80,85 @@ function ProjectSelectField({
         </option>
       ))}
     </select>
+  );
+}
+
+function GpsLocationField({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const [locating, setLocating] = useState(false);
+  const [locError, setLocError] = useState("");
+
+  function getLocation() {
+    if (!navigator.geolocation) {
+      setLocError("Geolocation is not supported by your browser.");
+      return;
+    }
+
+    setLocating(true);
+    setLocError("");
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        onChange(`${latitude.toFixed(7)},${longitude.toFixed(7)}`);
+        setLocating(false);
+      },
+      () => {
+        setLocError("Unable to get location. Please allow location access.");
+        setLocating(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
+  }
+
+  const mapsUrl = value
+    ? `https://www.google.com/maps?q=${encodeURIComponent(value)}`
+    : null;
+
+  return (
+    <div className="space-y-2">
+      <div className="flex gap-2">
+        <input
+          className="flex-1 rounded-2xl border border-line bg-white px-4 py-3 outline-none transition focus:border-accent"
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="lat,lng — or use button to detect"
+          type="text"
+          value={value}
+        />
+        <button
+          className="flex items-center gap-2 rounded-2xl border border-line bg-white px-4 py-3 text-xs font-semibold text-ink transition hover:bg-accent hover:text-white hover:border-accent disabled:opacity-60"
+          disabled={locating}
+          onClick={getLocation}
+          type="button"
+        >
+          {locating ? (
+            <Loader2 size={14} className="animate-spin" />
+          ) : (
+            <MapPin size={14} />
+          )}
+          {locating ? "Locating..." : "Get Location"}
+        </button>
+      </div>
+      {locError ? (
+        <p className="text-xs text-red-500">{locError}</p>
+      ) : null}
+      {mapsUrl ? (
+        <a
+          className="inline-flex items-center gap-1.5 text-xs font-medium text-accent hover:underline"
+          href={mapsUrl}
+          rel="noreferrer"
+          target="_blank"
+        >
+          <MapPin size={11} />
+          View on Google Maps
+        </a>
+      ) : null}
+    </div>
   );
 }
 
@@ -794,6 +873,11 @@ export function ResourceWorkspace({ module }: ResourceWorkspaceProps) {
                         type="file"
                       />
                     </div>
+                  ) : field.type === "gps_location" ? (
+                    <GpsLocationField
+                      value={String(form[field.key] ?? "")}
+                      onChange={(v) => updateFieldValue(field.key, v)}
+                    />
                   ) : (
                     <div className="space-y-2">
                       <input
