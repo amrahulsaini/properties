@@ -1043,7 +1043,8 @@ const resourceConfigs: Record<ResourceName, ResourceConfig> = {
     },
     async afterCreate(record) {
       const id = Number(record.id ?? 0);
-      const code = `DAST-${new Date().getFullYear()}-${String(id).padStart(4, "0")}`;
+      const existing = asTrimmedString(record.folder_code);
+      const code = existing || `DAST-${new Date().getFullYear()}-${String(id).padStart(4, "0")}`;
       await execute(
         "UPDATE document_folders SET folder_code = ? WHERE id = ?",
         [code, id],

@@ -942,7 +942,7 @@ export const moduleCatalog: ModuleConfig[] = [
     icon: "FolderLock",
     resource: "document-folders",
     fields: [
-      { key: "folder_code", label: "Dast Number", type: "text", readOnly: true },
+      { key: "folder_code", label: "Dast Number", type: "text", placeholder: "Leave blank to auto-generate" },
       { key: "project_id", label: "Project Name", type: "project_select", required: true },
       { key: "plot_number", label: "Plot Number", type: "text", required: true },
       { key: "buyer_name", label: "Buyer Name", type: "text", required: true },
