@@ -26,8 +26,9 @@ function formatTick(value: number) {
   return `₹${value}`;
 }
 
-function formatTooltip(value: number) {
-  return `₹${value.toLocaleString("en-IN")}`;
+function formatTooltip(value: string | number | Array<string | number>) {
+  const num = typeof value === "number" ? value : Number(value);
+  return `₹${num.toLocaleString("en-IN")}`;
 }
 
 export function OverviewCharts({ data }: OverviewChartsProps) {
