@@ -18,13 +18,33 @@ export async function GET(
     assertResourceAccess(session, "document-folders", "read");
 
     const { id } = await context.params;
+    const { searchParams } = new URL(request.url);
+    const pdfType = searchParams.get("type") ?? "all";
+
     const folder = await getResourceById("document-folders", Number(id));
-    const documents = await queryRows<GenericRecord>(
+    const allDocuments = await queryRows<GenericRecord>(
       `SELECT * FROM documents
        WHERE folder_id = ?
        ORDER BY section ASC, sort_order ASC, uploaded_at ASC`,
       [Number(id)],
     );
+
+    // Type 1: buyer + seller aadhaar documents only
+    // Type 2: witness and identifier aadhaar documents only
+    let documents: GenericRecord[];
+    if (pdfType === "1") {
+      documents = allDocuments.filter((d) =>
+        ["buyer", "seller"].includes(String(d.section ?? "")),
+      );
+    } else if (pdfType === "2") {
+      documents = allDocuments.filter((d) =>
+        ["witness_1", "witness_2", "identifier_1", "identifier_2"].includes(
+          String(d.section ?? ""),
+        ),
+      );
+    } else {
+      documents = allDocuments;
+    }
 
     const projectId = Number(folder.project_id ?? 0);
     if (projectId > 0) {

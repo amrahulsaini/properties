@@ -150,22 +150,26 @@ function CropModal({
     }
   }, [crop, imgLoaded]);
 
-  function getCanvasPos(e: React.MouseEvent<HTMLCanvasElement>) {
-    const rect = canvasRef.current!.getBoundingClientRect();
+  function getCanvasPos(e: React.PointerEvent<HTMLCanvasElement>) {
+    const canvas = canvasRef.current!;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
     return {
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
+      x: (e.clientX - rect.left) * scaleX,
+      y: (e.clientY - rect.top) * scaleY,
     };
   }
 
-  function onMouseDown(e: React.MouseEvent<HTMLCanvasElement>) {
+  function onPointerDown(e: React.PointerEvent<HTMLCanvasElement>) {
+    e.currentTarget.setPointerCapture(e.pointerId);
     const pos = getCanvasPos(e);
     setStartPos(pos);
     setCrop(null);
     setDragging(true);
   }
 
-  function onMouseMove(e: React.MouseEvent<HTMLCanvasElement>) {
+  function onPointerMove(e: React.PointerEvent<HTMLCanvasElement>) {
     if (!dragging) return;
     const pos = getCanvasPos(e);
     const x = Math.min(startPos.x, pos.x);
@@ -175,7 +179,7 @@ function CropModal({
     setCrop({ x, y, w, h });
   }
 
-  function onMouseUp() {
+  function onPointerUp() {
     setDragging(false);
   }
 
@@ -226,11 +230,11 @@ function CropModal({
             <canvas
               ref={canvasRef}
               className="mx-auto block cursor-crosshair rounded-xl border border-line"
-              onMouseDown={onMouseDown}
-              onMouseLeave={onMouseUp}
-              onMouseMove={onMouseMove}
-              onMouseUp={onMouseUp}
-              style={{ maxWidth: "100%" }}
+              onPointerDown={onPointerDown}
+              onPointerLeave={onPointerUp}
+              onPointerMove={onPointerMove}
+              onPointerUp={onPointerUp}
+              style={{ maxWidth: "100%", touchAction: "none" }}
             />
           )}
         </div>

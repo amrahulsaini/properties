@@ -67,9 +67,17 @@ async function loadPublicImage(url: unknown) {
   }
 }
 
-async function embedImage(pdf: PDFDocument, bytes: Uint8Array | Buffer, fileName = "") {
+async function embedImage(
+  pdf: PDFDocument,
+  bytes: Uint8Array | Buffer,
+  fileName = "",
+  mimeType = "",
+) {
   const lower = fileName.toLowerCase();
-  const isPng = lower.endsWith(".png");
+  const mime = mimeType.toLowerCase();
+  const isPng =
+    mime === "image/png" ||
+    (!mime && lower.endsWith(".png"));
   return isPng ? pdf.embedPng(bytes) : pdf.embedJpg(bytes);
 }
 
@@ -332,8 +340,25 @@ async function appendImageGroups(
     });
 
     for (const [index, record] of group.entries()) {
-      const fileBuffer = await readFile(String(record.file_path));
-      const embedded = await embedImage(pdf, fileBuffer, String(record.file_name ?? ""));
+      let fileBuffer: Buffer | null = null;
+      try {
+        fileBuffer = await readFile(String(record.file_path));
+      } catch {
+        continue;
+      }
+
+      let embedded;
+      try {
+        embedded = await embedImage(
+          pdf,
+          fileBuffer,
+          String(record.file_name ?? ""),
+          String(record.mime_type ?? ""),
+        );
+      } catch {
+        continue;
+      }
+
       const column = columns === 1 ? 0 : index % columns;
       const row = columns === 1 ? index : Math.floor(index / columns);
       const x = margin + column * (boxWidth + 14);
@@ -492,10 +517,14 @@ export async function createDocumentFolderPackPdf(
   }
 
   for (const record of pdfDocs) {
-    const fileBuffer = await readFile(String(record.file_path));
-    const source = await PDFDocument.load(fileBuffer);
-    const pages = await pdf.copyPages(source, source.getPageIndices());
-    pages.forEach((copiedPage) => pdf.addPage(copiedPage));
+    try {
+      const fileBuffer = await readFile(String(record.file_path));
+      const source = await PDFDocument.load(fileBuffer);
+      const pages = await pdf.copyPages(source, source.getPageIndices());
+      pages.forEach((copiedPage) => pdf.addPage(copiedPage));
+    } catch {
+      // skip missing or corrupt PDF attachments
+    }
   }
 
   return pdf.save();
