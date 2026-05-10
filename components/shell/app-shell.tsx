@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Briefcase,
   Building2,
@@ -63,41 +63,19 @@ interface AppShellProps {
 export function AppShell({ children, user }: AppShellProps) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const sidebarRef = useRef<HTMLElement>(null);
+
+  // Prevent body scroll when mobile nav is open
   useEffect(() => {
     if (typeof window === "undefined") return;
-
-    if (open) {
-      const scrollY = window.scrollY;
-      document.body.style.position = "fixed";
-      document.body.style.top = `-${scrollY}px`;
-      document.body.style.left = "0";
-      document.body.style.right = "0";
-    } else {
-      const top = document.body.style.top;
-      document.body.style.position = "";
-      document.body.style.top = "";
-      document.body.style.left = "";
-      document.body.style.right = "";
-
-      if (top) {
-        const scrollY = -parseInt(top || "0", 10) || 0;
-        window.scrollTo(0, scrollY);
-      }
-    }
-
-    return () => {
-      const top = document.body.style.top;
-      document.body.style.position = "";
-      document.body.style.top = "";
-      document.body.style.left = "";
-      document.body.style.right = "";
-
-      if (top) {
-        const scrollY = -parseInt(top || "0", 10) || 0;
-        window.scrollTo(0, scrollY);
-      }
-    };
+    document.body.style.overflow = open ? "hidden" : "";
+    return () => { document.body.style.overflow = ""; };
   }, [open]);
+
+  // Reset sidebar scroll to top on every route change
+  useEffect(() => {
+    sidebarRef.current?.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
+  }, [pathname]);
   const sections = getModuleSections();
 
   async function logout() {
@@ -111,6 +89,7 @@ export function AppShell({ children, user }: AppShellProps) {
     <div className="min-h-screen min-h-dvh bg-app">
       <div className="flex w-full">
         <aside
+          ref={sidebarRef}
           className={`fixed inset-y-0 left-0 z-40 w-[272px] min-w-[272px] border-r border-[#222] bg-black/95 p-5 text-white shadow-soft transition-transform duration-300 md:sticky md:top-0 md:h-screen subtle-scrollbar overflow-y-auto ${
             open ? "translate-x-0" : "-translate-x-[120%] md:translate-x-0"
           }`}
