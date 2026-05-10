@@ -115,28 +115,28 @@ export function AppShell({ children, user }: AppShellProps) {
             open ? "translate-x-0" : "-translate-x-[120%] md:translate-x-0"
           }`}
         >
-          <div className="mb-8 flex items-start justify-between">
-            <div className="flex-1">
+          <div className="mb-8 flex items-start justify-between gap-3">
+            {/* Logo in a white pill so it reads on the dark sidebar */}
+            <div className="flex-1 rounded-2xl bg-white px-3 py-2">
               <Image
                 src="/samarth-logo.webp"
                 alt={defaultBranding.companyName}
                 width={200}
-                height={60}
+                height={56}
                 priority
-                className="h-14 w-auto object-contain"
-                style={{ filter: "brightness(0) invert(1)" }}
+                className="h-10 w-full object-contain object-left"
               />
             </div>
-            <button className="cursor-pointer md:hidden" onClick={() => setOpen(false)} type="button">
+            <button className="cursor-pointer shrink-0 text-white/70 hover:text-white transition md:hidden" onClick={() => setOpen(false)} type="button">
               <X size={20} />
             </button>
           </div>
 
           <nav className="space-y-6 pb-10">
             <Link
-              className={`flex cursor-pointer items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-accent active:scale-95 ${
+              className={`flex cursor-pointer items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold transition-all duration-150 focus:outline-none active:scale-95 ${
                 isDashboard
-                  ? "bg-white text-black shadow-md"
+                  ? "bg-accent text-white shadow-md"
                   : "text-white/80 hover:bg-white/10 hover:text-white"
               }`}
               href="/dashboard"
@@ -159,7 +159,7 @@ export function AppShell({ children, user }: AppShellProps) {
                     return (
                       <Link
                         key={module.slug}
-                        className={`flex cursor-pointer items-center justify-between rounded-2xl px-4 py-2.5 text-sm font-semibold transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-accent active:scale-95 ${
+                        className={`flex cursor-pointer items-center justify-between rounded-2xl px-4 py-2.5 text-sm font-semibold transition-all duration-150 focus:outline-none active:scale-95 ${
                           active
                             ? "bg-accent text-white shadow-md"
                             : "text-white/70 hover:bg-white/10 hover:text-white"
