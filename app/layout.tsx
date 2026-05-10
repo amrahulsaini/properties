@@ -22,6 +22,10 @@ export const metadata: Metadata = {
   title: `${defaultBranding.productTitle} | ${defaultBranding.companyName}`,
   description:
     "Property, land, GST, agent, booking, construction, and document operations in one platform.",
+  icons: {
+    icon: "/samarth-icon.ico",
+    shortcut: "/samarth-icon.ico",
+  },
 };
 
 export default function RootLayout({

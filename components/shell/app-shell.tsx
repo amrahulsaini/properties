@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
@@ -115,37 +116,42 @@ export function AppShell({ children, user }: AppShellProps) {
           }`}
         >
           <div className="mb-8 flex items-start justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-orange-200">
-                {defaultBranding.appName}
-              </p>
-              <h2 className="mt-3 text-2xl font-semibold leading-tight">
-                {defaultBranding.companyName}
-              </h2>
+            <div className="flex-1">
+              <Image
+                src="/samarth-logo.webp"
+                alt={defaultBranding.companyName}
+                width={200}
+                height={60}
+                priority
+                className="h-14 w-auto object-contain"
+                style={{ filter: "brightness(0) invert(1)" }}
+              />
             </div>
-            <button className="md:hidden" onClick={() => setOpen(false)} type="button">
+            <button className="cursor-pointer md:hidden" onClick={() => setOpen(false)} type="button">
               <X size={20} />
             </button>
           </div>
 
           <nav className="space-y-6 pb-10">
             <Link
-              className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold transition focus:outline-none focus:ring-2 focus:ring-accent ${
-                isDashboard ? "bg-white text-black" : "text-white hover:bg-white/10"
+              className={`flex cursor-pointer items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-accent active:scale-95 ${
+                isDashboard
+                  ? "bg-white text-black shadow-md"
+                  : "text-white/80 hover:bg-white/10 hover:text-white"
               }`}
               href="/dashboard"
               onClick={() => setOpen(false)}
             >
               <LayoutDashboard size={18} />
-              <span className={isDashboard ? "text-black" : "text-white"}>Dashboard</span>
+              <span>Dashboard</span>
             </Link>
 
             {Object.entries(sections).map(([section, modules]) => (
               <div key={section}>
-                <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.28em] text-zinc-400">
+                <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.28em] text-zinc-500">
                   {section}
                 </p>
-                <div className="space-y-2">
+                <div className="space-y-1">
                   {modules.map((module) => {
                     const Icon = iconMap[module.icon] ?? Building2;
                     const active = pathname === `/${module.slug}`;
@@ -153,19 +159,19 @@ export function AppShell({ children, user }: AppShellProps) {
                     return (
                       <Link
                         key={module.slug}
-                        className={`flex items-center justify-between rounded-2xl px-4 py-3 text-sm font-bold transition focus:outline-none focus:ring-2 focus:ring-accent ${
+                        className={`flex cursor-pointer items-center justify-between rounded-2xl px-4 py-2.5 text-sm font-semibold transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-accent active:scale-95 ${
                           active
-                            ? "bg-accent text-white"
-                            : "text-white hover:bg-white/10"
+                            ? "bg-accent text-white shadow-md"
+                            : "text-white/70 hover:bg-white/10 hover:text-white"
                         }`}
                         href={`/${module.slug}`}
                         onClick={() => setOpen(false)}
                       >
-                        <span className={`flex items-center gap-3 ${active ? "" : "text-white"}`}>
-                          <Icon size={18} />
-                          <span className={active ? "text-white" : "text-white"}>{module.title}</span>
+                        <span className="flex items-center gap-3">
+                          <Icon size={16} className={active ? "text-white" : "text-white/60"} />
+                          <span>{module.title}</span>
                         </span>
-                        <ChevronRight size={16} />
+                        {active && <ChevronRight size={14} className="opacity-70" />}
                       </Link>
                     );
                   })}
@@ -188,7 +194,7 @@ export function AppShell({ children, user }: AppShellProps) {
           <header className="glass mb-4 flex items-center justify-between rounded-[28px] px-5 py-4">
             <div className="flex items-center gap-3">
               <button
-                className="rounded-full border border-line bg-white p-2 md:hidden"
+                className="cursor-pointer rounded-full border border-line bg-white p-2 transition hover:bg-zinc-100 md:hidden"
                 onClick={() => setOpen(true)}
                 type="button"
               >
@@ -214,7 +220,7 @@ export function AppShell({ children, user }: AppShellProps) {
                 <p className="text-sm font-semibold text-ink">{user.name}</p>
               </div>
               <button
-                className="flex items-center gap-2 rounded-full bg-black px-4 py-2 text-sm font-semibold text-white transition hover:bg-zinc-800"
+                className="flex cursor-pointer items-center gap-2 rounded-full bg-black px-4 py-2 text-sm font-semibold text-white transition hover:bg-zinc-800 active:scale-95"
                 onClick={logout}
                 type="button"
               >
@@ -224,7 +230,7 @@ export function AppShell({ children, user }: AppShellProps) {
             </div>
           </header>
 
-          <div>{children}</div>
+          <div className="animate-fade-in">{children}</div>
         </div>
       </div>
     </div>
