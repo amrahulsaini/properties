@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { compressImage, uploadWithProgress } from "@/lib/upload-utils";
 import { Card } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/data-table";
 import { OrbitalLoader } from "@/components/ui/orbital-loader";
@@ -357,6 +358,7 @@ function DocumentCard({
   );
 
   const [uploading, setUploading] = useState(false);
+  const [uploadPct, setUploadPct] = useState(0);
   const [deleting, setDeleting] = useState(false);
   const [cropSrc, setCropSrc] = useState<string | null>(null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
@@ -389,11 +391,13 @@ function DocumentCard({
     }
   }
 
-  async function uploadFile(file: File, title?: string) {
+  async function uploadFile(rawFile: File, title?: string) {
     setError("");
     setUploading(true);
+    setUploadPct(0);
 
     try {
+      const file = await compressImage(rawFile);
       const formData = new FormData();
       formData.append("folder_id", folderId);
       formData.append("section", section);
@@ -402,14 +406,15 @@ function DocumentCard({
       formData.append("document_type", docType.value);
       formData.append("files", file);
 
-      const res = await fetch("/api/v1/documents/upload", { method: "POST", body: formData });
-      const payload = await res.json();
+      const res = await uploadWithProgress("/api/v1/documents/upload", formData, setUploadPct);
+      const payload = await res.json() as { error?: string };
       if (!res.ok) throw new Error(payload.error ?? "Upload failed.");
       onUploaded();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed.");
     } finally {
       setUploading(false);
+      setUploadPct(0);
     }
   }
 
@@ -493,15 +498,22 @@ function DocumentCard({
             )}
           </div>
         ) : (
-          <div className="relative flex h-20 items-center justify-center rounded-xl border-2 border-dashed border-zinc-200 bg-zinc-50 text-xs text-muted">
-            {uploading ? "Uploading..." : <Upload size={18} className="text-zinc-300" />}
-            {!uploading && (
-              <input
-                accept="image/*,.pdf"
-                className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                onChange={handleFileChange}
-                type="file"
-              />
+          <div className="relative flex h-20 flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-zinc-200 bg-zinc-50 text-xs text-muted">
+            {uploading ? (
+              <div className="w-full space-y-1 px-3">
+                <p className="text-center text-[10px] font-semibold text-accent">
+                  {uploadPct < 100 ? `${uploadPct}%` : "Processing…"}
+                </p>
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-200">
+                  <div className="h-full rounded-full bg-accent transition-all duration-150" style={{ width: `${uploadPct}%` }} />
+                </div>
+              </div>
+            ) : (
+              <>
+                <Upload size={16} className="text-zinc-300" />
+                <span className="text-[9px] uppercase tracking-wider">Upload</span>
+                <input accept="image/*,.pdf" className="absolute inset-0 h-full w-full cursor-pointer opacity-0" onChange={handleFileChange} type="file" />
+              </>
             )}
           </div>
         )}

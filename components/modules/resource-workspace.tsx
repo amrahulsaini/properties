@@ -10,6 +10,7 @@ import { applyDevelopmentEntryComputedValues } from "@/lib/development-entries";
 import { formatCurrency, formatNumber } from "@/lib/format";
 import type { GenericRecord, ModuleConfig, ModuleField } from "@/lib/types";
 import { FileText, MessageCircleMore, Search, X, Building2, MapPin, Loader2 } from "lucide-react";
+import { compressImage, uploadWithProgress } from "@/lib/upload-utils";
 
 interface ResourceWorkspaceProps {
   module: ModuleConfig;
@@ -389,6 +390,7 @@ export function ResourceWorkspace({ module }: ResourceWorkspaceProps) {
   const [error, setError] = useState("");
   const [isRecordsModalOpen, setIsRecordsModalOpen] = useState(false);
   const [uploadingField, setUploadingField] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [deletingRow, setDeletingRow] = useState<GenericRecord | null>(null);
   const [projectCodeStatus, setProjectCodeStatus] = useState<"idle" | "checking" | "available" | "taken">("idle");
 
@@ -583,35 +585,28 @@ export function ResourceWorkspace({ module }: ResourceWorkspaceProps) {
     void findDefault();
   }, [editingId, form, module]);
 
-  async function handleFileUpload(file: File, key: string) {
+  async function handleFileUpload(rawFile: File, key: string) {
     setUploadingField(key);
+    setUploadProgress(0);
     setError("");
     try {
+      const file = await compressImage(rawFile);
       const formData = new FormData();
       formData.append("file", file);
 
       const localPreviewUrl = URL.createObjectURL(file);
-      setForm((current) => ({
-        ...current,
-        [key]: localPreviewUrl,
-      }));
+      setForm((current) => ({ ...current, [key]: localPreviewUrl }));
 
-      const response = await fetch("/api/v1/upload", {
-        method: "POST",
-        body: formData,
-      });
+      const response = await uploadWithProgress("/api/v1/upload", formData, setUploadProgress);
 
       if (!response.ok) {
-        const result = await response.json().catch(() => ({}));
-        throw new Error(`Upload failed: ${result.error || response.statusText || "Unknown error"}`);
+        const result = await response.json().catch(() => ({})) as { error?: string };
+        throw new Error(`Upload failed: ${result.error ?? "Unknown error"}`);
       }
 
-      const result = await response.json();
+      const result = await response.json() as { url?: string };
       if (result.url) {
-        setForm((current) => ({
-          ...current,
-          [key]: result.url,
-        }));
+        setForm((current) => ({ ...current, [key]: result.url as string }));
         URL.revokeObjectURL(localPreviewUrl);
       } else {
         throw new Error("No URL returned from upload");
@@ -620,6 +615,7 @@ export function ResourceWorkspace({ module }: ResourceWorkspaceProps) {
       setError(err instanceof Error ? err.message : "An error occurred during upload.");
     } finally {
       setUploadingField(null);
+      setUploadProgress(0);
     }
   }
 
@@ -911,9 +907,19 @@ export function ResourceWorkspace({ module }: ResourceWorkspaceProps) {
                             </button>
                           </div>
                         ) : (
-                          <div className="text-sm text-gray-500">
+                          <div className="w-full text-sm text-gray-500">
                             {uploadingField === field.key ? (
-                              <span className="mt-2 block animate-pulse">Uploading...</span>
+                              <div className="space-y-2 px-2">
+                                <p className="text-center text-[11px] font-semibold text-accent">
+                                  {uploadProgress < 100 ? `Uploading… ${uploadProgress}%` : "Processing…"}
+                                </p>
+                                <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-100">
+                                  <div
+                                    className="h-full rounded-full bg-accent transition-all duration-200"
+                                    style={{ width: `${uploadProgress}%` }}
+                                  />
+                                </div>
+                              </div>
                             ) : (
                               <>
                                 <span className="mb-1 block font-semibold text-accent">Click or Drag &amp; Drop</span>
