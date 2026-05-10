@@ -26,11 +26,6 @@ function formatTick(value: number) {
   return `₹${value}`;
 }
 
-function formatTooltip(value: string | number | Array<string | number>) {
-  const num = typeof value === "number" ? value : Number(value);
-  return `₹${num.toLocaleString("en-IN")}`;
-}
-
 export function OverviewCharts({ data }: OverviewChartsProps) {
   // Show only the last 3 months
   const chartData = data.slice(-3);
@@ -58,7 +53,7 @@ export function OverviewCharts({ data }: OverviewChartsProps) {
             tickFormatter={formatTick}
             width={68}
           />
-          <Tooltip formatter={formatTooltip} />
+          <Tooltip formatter={(value) => `₹${Number(value ?? 0).toLocaleString("en-IN")}`} />
           <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
           <Line
             dataKey="sales"
