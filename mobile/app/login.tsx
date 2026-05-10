@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, ActivityIndicator, Alert, ScrollView,
+  KeyboardAvoidingView, Platform, ActivityIndicator, Alert, ScrollView, Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -40,11 +40,11 @@ export default function LoginScreen() {
         <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
           {/* Logo */}
           <View style={s.logoWrap}>
-            <View style={s.logoBadge}>
-              <Text style={s.logoLetters}>SP</Text>
-            </View>
-            <Text style={s.appName}>Samarth Properties</Text>
-            <Text style={s.tagline}>Real Estate Management</Text>
+            <Image
+              source={require('@/assets/samarth-logo.webp')}
+              style={s.logoImg}
+              resizeMode="contain"
+            />
           </View>
 
           {/* Card */}
@@ -110,16 +110,7 @@ const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.bg },
   scroll: { flexGrow: 1, justifyContent: 'center', padding: 24 },
   logoWrap: { alignItems: 'center', marginBottom: 32 },
-  logoBadge: {
-    width: 72, height: 72, borderRadius: 20,
-    backgroundColor: Colors.accent, alignItems: 'center', justifyContent: 'center',
-    marginBottom: 12,
-    shadowColor: Colors.accent, shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35, shadowRadius: 12, elevation: 8,
-  },
-  logoLetters: { color: '#fff', fontSize: 28, fontWeight: '800', letterSpacing: 1 },
-  appName: { fontSize: 22, fontWeight: '700', color: Colors.ink, letterSpacing: 0.3 },
-  tagline: { fontSize: 13, color: Colors.muted, marginTop: 4 },
+  logoImg: { width: 200, height: 80 },
   card: {
     backgroundColor: Colors.surface, borderRadius: 20, padding: 24,
     shadowColor: '#000', shadowOffset: { width: 0, height: 2 },

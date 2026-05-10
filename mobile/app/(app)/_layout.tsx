@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Alert, Image } from 'react-native';
 import { DrawerContentScrollView, type DrawerContentComponentProps } from '@react-navigation/drawer';
 import { Drawer } from 'expo-router/drawer';
 import { useRouter, usePathname } from 'expo-router';
@@ -58,13 +58,11 @@ function CustomDrawerContent(props: DrawerContentComponentProps) {
     >
       {/* Logo */}
       <View style={d.header}>
-        <View style={d.logoBadge}>
-          <Text style={d.logoTxt}>SP</Text>
-        </View>
-        <View>
-          <Text style={d.appName}>Samarth</Text>
-          <Text style={d.appSub}>Properties</Text>
-        </View>
+        <Image
+          source={require('@/assets/samarth-logo.webp')}
+          style={d.logoImg}
+          resizeMode="contain"
+        />
       </View>
 
       {/* Dashboard */}
@@ -129,18 +127,11 @@ export default function AppLayout() {
 const d = StyleSheet.create({
   scroll: { paddingBottom: 16 },
   header: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
     padding: 20, paddingBottom: 16,
     borderBottomWidth: 1, borderBottomColor: Colors.line,
     marginBottom: 8,
   },
-  logoBadge: {
-    width: 44, height: 44, borderRadius: 12,
-    backgroundColor: Colors.accent, alignItems: 'center', justifyContent: 'center',
-  },
-  logoTxt: { color: '#fff', fontSize: 16, fontWeight: '800' },
-  appName: { fontSize: 15, fontWeight: '700', color: Colors.ink },
-  appSub: { fontSize: 12, color: Colors.muted },
+  logoImg: { width: 160, height: 48 },
   sectionHead: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     paddingHorizontal: 16, paddingTop: 16, paddingBottom: 4,

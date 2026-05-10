@@ -12,27 +12,23 @@ export default function RootLayout() {
   const router = useRouter();
   const segments = useSegments();
   const [ready, setReady] = useState(false);
-  const [authed, setAuthed] = useState(false);
 
   useEffect(() => {
-    async function bootstrap() {
-      try {
-        const token = await getToken();
-        setAuthed(!!token);
-      } finally {
-        setReady(true);
-        SplashScreen.hideAsync();
-      }
-    }
-    bootstrap();
+    getToken().then(() => {
+      setReady(true);
+      SplashScreen.hideAsync();
+    });
   }, []);
 
+  // Re-read token on every segment change so login/logout take effect immediately
   useEffect(() => {
     if (!ready) return;
     const inApp = segments[0] === '(app)';
-    if (!authed && inApp) router.replace('/login');
-    else if (authed && !inApp) router.replace('/(app)');
-  }, [ready, authed, segments]);
+    getToken().then(token => {
+      if (!token && inApp) router.replace('/login');
+      else if (token && !inApp) router.replace('/(app)');
+    });
+  }, [ready, segments]);
 
   if (!ready) return null;
 
