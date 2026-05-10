@@ -79,6 +79,7 @@ export function AppShell({ children, user }: AppShellProps) {
   const sections = getModuleSections();
 
   async function logout() {
+    if (!confirm("Are you sure you want to log out?")) return;
     await fetch("/api/v1/auth/logout", { method: "POST" });
     window.location.href = "/login";
   }

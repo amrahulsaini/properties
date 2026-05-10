@@ -198,9 +198,6 @@ export function SettingsWorkspace() {
             >
               Save settings
             </button>
-            <span className="rounded-full border border-line px-4 py-3 text-xs font-semibold uppercase tracking-[0.24em] text-muted">
-              Update env separately for DB, SMTP, Twilio, storage
-            </span>
           </div>
 
           {message ? (

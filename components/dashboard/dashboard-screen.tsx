@@ -1,10 +1,12 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { StatCard } from "@/components/ui/stat-card";
 import { OverviewCharts } from "@/components/dashboard/overview-charts";
 import { formatCurrency } from "@/lib/format";
+import { defaultBranding } from "@/lib/brand";
 
 interface DashboardPayload {
   totals: {
@@ -98,6 +100,24 @@ export function DashboardScreen() {
 
   return (
     <div className="space-y-4">
+      {/* Dashboard logo banner */}
+      <div className="flex items-center gap-4 rounded-[24px] border border-line bg-white/80 px-5 py-4">
+        <div className="rounded-xl bg-white p-2 shadow-sm ring-1 ring-line">
+          <Image
+            src="/samarth-logo.webp"
+            alt={defaultBranding.companyName}
+            width={140}
+            height={40}
+            priority
+            className="h-9 w-auto object-contain"
+          />
+        </div>
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-muted">Dashboard</p>
+          <h1 className="mt-0.5 text-base font-semibold text-ink sm:text-lg">{defaultBranding.companyName}</h1>
+        </div>
+      </div>
+
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Total Sales" tone="accent" value={formatCurrency(data.totals.sales)} />
         <StatCard

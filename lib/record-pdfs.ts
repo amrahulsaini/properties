@@ -1,5 +1,6 @@
 import { readFile } from "fs/promises";
 import path from "path";
+import sharp from "sharp";
 import { PDFDocument, PDFPage, PDFFont, StandardFonts, rgb } from "pdf-lib";
 import { formatCurrency, formatDate, formatNumber } from "@/lib/format";
 import type { GenericRecord } from "@/lib/types";
@@ -67,17 +68,27 @@ async function loadPublicImage(url: unknown) {
   }
 }
 
+async function toGrayscale(bytes: Uint8Array | Buffer): Promise<Buffer> {
+  return sharp(Buffer.from(bytes)).grayscale().jpeg({ quality: 90 }).toBuffer();
+}
+
 async function embedImage(
   pdf: PDFDocument,
   bytes: Uint8Array | Buffer,
   fileName = "",
   mimeType = "",
+  grayscale = false,
 ) {
   const lower = fileName.toLowerCase();
   const mime = mimeType.toLowerCase();
   const isPng =
     mime === "image/png" ||
     (!mime && lower.endsWith(".png"));
+
+  if (grayscale) {
+    const gray = await toGrayscale(bytes);
+    return pdf.embedJpg(gray);
+  }
   return isPng ? pdf.embedPng(bytes) : pdf.embedJpg(bytes);
 }
 
@@ -317,7 +328,9 @@ async function appendImageGroups(
   layout: unknown,
   orientation: unknown,
   gridCount: number,
+  colorMode: unknown = "color",
 ) {
+  const isGrayscale = String(colorMode ?? "color").toLowerCase() === "bw";
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
   const regular = await pdf.embedFont(StandardFonts.Helvetica);
   const { width, height } = getPageSize(layout, orientation);
@@ -354,6 +367,7 @@ async function appendImageGroups(
           fileBuffer,
           String(record.file_name ?? ""),
           String(record.mime_type ?? ""),
+          isGrayscale,
         );
       } catch {
         continue;
@@ -513,7 +527,7 @@ export async function createDocumentFolderPackPdf(
   const gridCount = layoutMode === "four-grid" ? 4 : layoutMode === "single-page" ? 1 : 2;
 
   if (imageDocs.length) {
-    await appendImageGroups(pdf, imageDocs, folder.print_layout, folder.page_orientation, gridCount);
+    await appendImageGroups(pdf, imageDocs, folder.print_layout, folder.page_orientation, gridCount, folder.color_mode);
   }
 
   for (const record of pdfDocs) {

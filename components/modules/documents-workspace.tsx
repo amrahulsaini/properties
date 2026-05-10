@@ -7,7 +7,7 @@ import { OrbitalLoader } from "@/components/ui/orbital-loader";
 import { ResourceWorkspace } from "@/components/modules/resource-workspace";
 import { getModuleConfig } from "@/lib/modules";
 import type { GenericRecord } from "@/lib/types";
-import { Printer, Upload, Crop, X, FileText, ChevronDown, ChevronUp } from "lucide-react";
+import { Printer, Upload, Crop, X, FileText, ChevronDown, ChevronUp, Trash2 } from "lucide-react";
 
 const documentModule = getModuleConfig("documents");
 
@@ -357,6 +357,7 @@ function DocumentCard({
   );
 
   const [uploading, setUploading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [cropSrc, setCropSrc] = useState<string | null>(null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [printSettingsOpen, setPrintSettingsOpen] = useState(false);
@@ -369,6 +370,24 @@ function DocumentCard({
     exportType: "pdf",
   });
   const [error, setError] = useState("");
+
+  async function handleDelete() {
+    if (!existing?.id) return;
+    if (!confirm(`Delete this ${docType.label}? This cannot be undone.`)) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/v1/documents/${existing.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const p = await res.json().catch(() => ({}));
+        throw new Error((p as { error?: string }).error ?? "Delete failed.");
+      }
+      onUploaded();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Delete failed.");
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   async function uploadFile(file: File, title?: string) {
     setError("");
@@ -517,6 +536,15 @@ function DocumentCard({
                 <Printer size={10} />
                 Print
               </button>
+              <button
+                className="flex items-center gap-1 rounded-full border border-line px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-red-500 hover:border-red-400 hover:bg-red-50 transition disabled:opacity-50"
+                disabled={deleting}
+                onClick={handleDelete}
+                type="button"
+              >
+                <Trash2 size={10} />
+                {deleting ? "…" : "Del"}
+              </button>
             </>
           ) : null}
         </div>
@@ -640,14 +668,16 @@ export function DocumentsWorkspace() {
     // (browsers block window.open called after an await)
     const newWin = window.open("", "_blank");
     if (newWin) {
-      newWin.document.write(
-        `<html><head><title>Generating PDF…</title></head>` +
-        `<body style="font-family:sans-serif;display:flex;flex-direction:column;` +
-        `align-items:center;justify-content:center;height:100vh;margin:0;background:#f9f9f7;">` +
-        `<p style="font-size:18px;font-weight:600;color:#111;">Generating PDF…</p>` +
-        `<p style="font-size:13px;color:#888;margin-top:8px;">Please wait.</p>` +
-        `</body></html>`,
-      );
+      newWin.document.write(`<!DOCTYPE html><html><head><title>Generating PDF…</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#fffaf5;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;gap:20px}
+.ring{width:64px;height:64px;border-radius:50%;border:5px solid rgba(242,106,27,.18);border-top-color:#F26A1B;animation:spin .75s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+h2{font-size:17px;font-weight:700;color:#111;letter-spacing:.04em}
+p{font-size:13px;color:#7c6f65}
+</style></head>
+<body><div class="ring"></div><h2>Generating PDF…</h2><p>Please wait a moment.</p></body></html>`);
       newWin.document.close();
     }
 

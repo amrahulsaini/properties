@@ -93,46 +93,106 @@ function GpsLocationField({
 }) {
   const [locating, setLocating] = useState(false);
   const [locError, setLocError] = useState("");
+  const [suggestions, setSuggestions] = useState<{ display_name: string; lat: string; lon: string }[]>([]);
+  const [searching, setSearching] = useState(false);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  function getLocation() {
+  async function reverseGeocode(lat: number, lon: number): Promise<string> {
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1`,
+        { headers: { "Accept-Language": "en" } },
+      );
+      if (!res.ok) return `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
+      const data = await res.json() as { display_name?: string };
+      return data.display_name ?? `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
+    } catch {
+      return `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
+    }
+  }
+
+  async function getLocation() {
     if (!navigator.geolocation) {
       setLocError("Geolocation is not supported by your browser.");
       return;
     }
-
     setLocating(true);
     setLocError("");
-
+    setSuggestions([]);
     navigator.geolocation.getCurrentPosition(
-      (position) => {
+      async (position) => {
         const { latitude, longitude } = position.coords;
-        onChange(`${latitude.toFixed(7)},${longitude.toFixed(7)}`);
+        const address = await reverseGeocode(latitude, longitude);
+        onChange(address);
         setLocating(false);
       },
       () => {
         setLocError("Unable to get location. Please allow location access.");
         setLocating(false);
       },
-      { enableHighAccuracy: true, timeout: 10000 },
+      { enableHighAccuracy: true, timeout: 15000 },
     );
   }
 
+  function handleInput(text: string) {
+    onChange(text);
+    setSuggestions([]);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    if (text.trim().length < 3) return;
+    searchTimer.current = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(text)}&limit=5&addressdetails=1`,
+          { headers: { "Accept-Language": "en" } },
+        );
+        if (res.ok) {
+          const data = await res.json() as { display_name: string; lat: string; lon: string }[];
+          setSuggestions(data);
+        }
+      } catch {
+        // ignore search errors
+      } finally {
+        setSearching(false);
+      }
+    }, 500);
+  }
+
   const mapsUrl = value
-    ? `https://www.google.com/maps?q=${encodeURIComponent(value)}`
+    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(value)}`
     : null;
 
   return (
     <div className="space-y-2">
-      <div className="flex gap-2">
-        <input
-          className="flex-1 rounded-2xl border border-line bg-white px-4 py-3 outline-none transition focus:border-accent"
-          onChange={(e) => onChange(e.target.value)}
-          placeholder="lat,lng — or use button to detect"
-          type="text"
-          value={value}
-        />
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <div className="relative flex-1">
+          <input
+            className="w-full rounded-2xl border border-line bg-white px-4 py-3 outline-none transition focus:border-accent"
+            onChange={(e) => handleInput(e.target.value)}
+            placeholder="Type address or use Detect Location"
+            type="text"
+            value={value}
+          />
+          {searching && (
+            <Loader2 size={14} className="absolute right-4 top-1/2 -translate-y-1/2 animate-spin text-muted" />
+          )}
+          {suggestions.length > 0 && (
+            <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-56 overflow-y-auto rounded-2xl border border-line bg-white shadow-lg">
+              {suggestions.map((s) => (
+                <button
+                  key={`${s.lat}-${s.lon}`}
+                  className="w-full px-4 py-3 text-left text-sm text-ink hover:bg-accent/5 transition border-b border-line last:border-0"
+                  type="button"
+                  onClick={() => { onChange(s.display_name); setSuggestions([]); }}
+                >
+                  {s.display_name}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         <button
-          className="flex items-center gap-2 rounded-2xl border border-line bg-white px-4 py-3 text-xs font-semibold text-ink transition hover:bg-accent hover:text-white hover:border-accent disabled:opacity-60"
+          className="flex items-center justify-center gap-2 rounded-2xl border border-line bg-white px-4 py-3 text-xs font-semibold text-ink transition hover:bg-accent hover:text-white hover:border-accent active:scale-95 disabled:opacity-60 sm:whitespace-nowrap"
           disabled={locating}
           onClick={getLocation}
           type="button"
@@ -142,13 +202,13 @@ function GpsLocationField({
           ) : (
             <MapPin size={14} />
           )}
-          {locating ? "Locating..." : "Get Location"}
+          {locating ? "Detecting…" : "Detect Location"}
         </button>
       </div>
       {locError ? (
         <p className="text-xs text-red-500">{locError}</p>
       ) : null}
-      {mapsUrl ? (
+      {mapsUrl && value ? (
         <a
           className="inline-flex items-center gap-1.5 text-xs font-medium text-accent hover:underline"
           href={mapsUrl}
