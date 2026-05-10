@@ -20,8 +20,20 @@ export async function GET(
     const { id } = await context.params;
     const { searchParams } = new URL(request.url);
     const pdfType = searchParams.get("type") ?? "all";
+    const printLayout = searchParams.get("layout") ?? null;
+    const aadhaarLayout = searchParams.get("aadhaar") ?? null;
+    const pageOrientation = searchParams.get("orientation") ?? null;
+    const colorMode = searchParams.get("color") ?? null;
 
-    const folder = await getResourceById("document-folders", Number(id));
+    const folderFromDb = await getResourceById("document-folders", Number(id));
+    // Override DB settings with URL params so user-chosen print settings are applied
+    const folder: GenericRecord = {
+      ...folderFromDb,
+      ...(printLayout ? { print_layout: printLayout } : {}),
+      ...(aadhaarLayout ? { aadhaar_layout: aadhaarLayout } : {}),
+      ...(pageOrientation ? { page_orientation: pageOrientation } : {}),
+      ...(colorMode ? { color_mode: colorMode } : {}),
+    };
     const allDocuments = await queryRows<GenericRecord>(
       `SELECT * FROM documents
        WHERE folder_id = ?

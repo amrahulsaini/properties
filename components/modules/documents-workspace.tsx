@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/data-table";
+import { OrbitalLoader } from "@/components/ui/orbital-loader";
 import { ResourceWorkspace } from "@/components/modules/resource-workspace";
 import { getModuleConfig } from "@/lib/modules";
 import type { GenericRecord } from "@/lib/types";
@@ -601,6 +602,7 @@ export function DocumentsWorkspace() {
     exportType: "pdf",
   });
   const [pdfSettingsModal, setPdfSettingsModal] = useState<1 | 2 | null>(null);
+  const [pdfGenerating, setPdfGenerating] = useState<1 | 2 | null>(null);
 
   const selectedFolder = folders.find((f) => String(f.id) === selectedFolderId);
   const folderDocuments = documents.filter((d) => String(d.folder_id) === selectedFolderId);
@@ -629,10 +631,57 @@ export function DocumentsWorkspace() {
     void loadData();
   }
 
-  function openPdf(type: 1 | 2) {
+  async function openPdf(type: 1 | 2, settings: PrintSettings) {
     if (!selectedFolderId) return;
-    const url = `/api/v1/document-folders/${selectedFolderId}/pdf?type=${type}&layout=${pdfPrintSettings.printLayout}&aadhaar=${pdfPrintSettings.aadhaarLayout}&orientation=${pdfPrintSettings.pageOrientation}&dpi=${pdfPrintSettings.dpiQuality}&color=${pdfPrintSettings.colorMode}`;
-    window.open(url, "_blank");
+
+    const url = `/api/v1/document-folders/${selectedFolderId}/pdf?type=${type}&layout=${settings.printLayout}&aadhaar=${settings.aadhaarLayout}&orientation=${settings.pageOrientation}&dpi=${settings.dpiQuality}&color=${settings.colorMode}`;
+
+    // Open a blank window immediately while still in the click handler
+    // (browsers block window.open called after an await)
+    const newWin = window.open("", "_blank");
+    if (newWin) {
+      newWin.document.write(
+        `<html><head><title>Generating PDF…</title></head>` +
+        `<body style="font-family:sans-serif;display:flex;flex-direction:column;` +
+        `align-items:center;justify-content:center;height:100vh;margin:0;background:#f9f9f7;">` +
+        `<p style="font-size:18px;font-weight:600;color:#111;">Generating PDF…</p>` +
+        `<p style="font-size:13px;color:#888;margin-top:8px;">Please wait.</p>` +
+        `</body></html>`,
+      );
+      newWin.document.close();
+    }
+
+    setPdfGenerating(type);
+    try {
+      const res = await fetch(url);
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        const message = (payload as { error?: string }).error ?? "PDF generation failed.";
+        if (newWin) newWin.document.write(`<html><body style="font-family:sans-serif;padding:40px;"><p style="color:#c00;font-size:16px;">${message}</p></body></html>`);
+        return;
+      }
+
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+
+      if (newWin) {
+        newWin.location.href = blobUrl;
+      } else {
+        // Fallback if popup was blocked: trigger download
+        const a = document.createElement("a");
+        a.href = blobUrl;
+        a.download = `dast-pdf-type${type}.pdf`;
+        a.click();
+      }
+
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 30_000);
+    } catch {
+      if (newWin) {
+        newWin.document.write(`<html><body style="font-family:sans-serif;padding:40px;"><p style="color:#c00;font-size:16px;">Failed to generate PDF. Please try again.</p></body></html>`);
+      }
+    } finally {
+      setPdfGenerating(null);
+    }
   }
 
   if (!documentModule) return null;
@@ -676,6 +725,7 @@ export function DocumentsWorkspace() {
             onClick={() => setIsVaultOpen(true)}
             type="button"
           >
+            {loading ? <OrbitalLoader size={20} /> : null}
             View All Files {!loading && `(${documents.length})`}
           </button>
         </div>
@@ -719,35 +769,36 @@ export function DocumentsWorkspace() {
             </p>
 
             <div className="mt-5 grid gap-4 md:grid-cols-2">
-              <div className="rounded-2xl border border-line p-4">
-                <p className="text-xs font-bold uppercase tracking-[0.2em] text-ink">PDF Type 1</p>
-                <p className="mt-1.5 text-sm text-muted">
-                  Buyer Aadhaar (Front + Back), PAN Card + Seller Aadhaar (Front + Back), PAN Card
-                </p>
-                <button
-                  className="mt-4 flex items-center gap-2 rounded-full bg-black px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.24em] text-white hover:brightness-105"
-                  onClick={() => setPdfSettingsModal(1)}
-                  type="button"
-                >
-                  <FileText size={13} />
-                  Generate PDF 1
-                </button>
-              </div>
+              {([1, 2] as const).map((type) => {
+                const isGenerating = pdfGenerating === type;
+                const desc = type === 1
+                  ? "Buyer Aadhaar (Front + Back), PAN Card + Seller Aadhaar (Front + Back), PAN Card"
+                  : "2 × Witness Aadhaar (Front + Back), PAN + 2 × Identifier Aadhaar (Front + Back), PAN";
 
-              <div className="rounded-2xl border border-line p-4">
-                <p className="text-xs font-bold uppercase tracking-[0.2em] text-ink">PDF Type 2</p>
-                <p className="mt-1.5 text-sm text-muted">
-                  2 × Witness Aadhaar (Front + Back), PAN + 2 × Identifier Aadhaar (Front + Back), PAN
-                </p>
-                <button
-                  className="mt-4 flex items-center gap-2 rounded-full bg-black px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.24em] text-white hover:brightness-105"
-                  onClick={() => setPdfSettingsModal(2)}
-                  type="button"
-                >
-                  <FileText size={13} />
-                  Generate PDF 2
-                </button>
-              </div>
+                return (
+                  <div key={type} className="relative rounded-2xl border border-line p-4 overflow-hidden">
+                    {isGenerating && (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-white/90 backdrop-blur-sm rounded-2xl z-10">
+                        <OrbitalLoader size={72} />
+                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted">
+                          Generating PDF {type}…
+                        </p>
+                      </div>
+                    )}
+                    <p className="text-xs font-bold uppercase tracking-[0.2em] text-ink">PDF Type {type}</p>
+                    <p className="mt-1.5 text-sm text-muted">{desc}</p>
+                    <button
+                      className="mt-4 flex items-center gap-2 rounded-full bg-black px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.24em] text-white hover:brightness-105 disabled:opacity-50"
+                      disabled={pdfGenerating !== null}
+                      onClick={() => setPdfSettingsModal(type)}
+                      type="button"
+                    >
+                      <FileText size={13} />
+                      Generate PDF {type}
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           </Card>
         </div>
@@ -758,7 +809,12 @@ export function DocumentsWorkspace() {
         <PrintSettingsModal
           settings={pdfPrintSettings}
           onChange={setPdfPrintSettings}
-          onPrint={() => { setPdfSettingsModal(null); openPdf(pdfSettingsModal!); }}
+          onPrint={() => {
+            const type = pdfSettingsModal!;
+            const settings = pdfPrintSettings;
+            setPdfSettingsModal(null);
+            void openPdf(type, settings);
+          }}
           onClose={() => setPdfSettingsModal(null)}
           title={`PDF Type ${pdfSettingsModal} — Print Settings`}
         />
