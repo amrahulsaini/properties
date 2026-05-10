@@ -108,10 +108,10 @@ export function AppShell({ children, user }: AppShellProps) {
   const isDashboard = pathname === "/dashboard";
 
   return (
-    <div className="min-h-screen bg-app">
+    <div className="min-h-screen min-h-dvh bg-app">
       <div className="flex w-full">
         <aside
-          className={`fixed inset-y-0 left-0 z-40 w-[290px] min-w-[290px] border-r border-[#222] bg-black/95 p-6 text-white shadow-soft transition md:sticky md:top-0 md:h-screen subtle-scrollbar overflow-y-auto ${
+          className={`fixed inset-y-0 left-0 z-40 w-[272px] min-w-[272px] border-r border-[#222] bg-black/95 p-5 text-white shadow-soft transition-transform duration-300 md:sticky md:top-0 md:h-screen subtle-scrollbar overflow-y-auto ${
             open ? "translate-x-0" : "-translate-x-[120%] md:translate-x-0"
           }`}
         >
@@ -190,21 +190,21 @@ export function AppShell({ children, user }: AppShellProps) {
           />
         ) : null}
 
-        <div className="min-w-0 flex-1 overflow-x-auto p-4 md:p-6">
-          <header className="glass mb-4 flex items-center justify-between rounded-[28px] px-5 py-4">
-            <div className="flex items-center gap-3">
+        <div className="min-w-0 flex-1 overflow-x-hidden p-3 md:p-6">
+          <header className="glass mb-4 flex items-center justify-between rounded-[22px] px-4 py-3 md:rounded-[28px] md:px-5 md:py-4">
+            <div className="flex min-w-0 items-center gap-2 md:gap-3">
               <button
-                className="cursor-pointer rounded-full border border-line bg-white p-2 transition hover:bg-zinc-100 md:hidden"
+                className="shrink-0 cursor-pointer rounded-full border border-line bg-white p-2 transition hover:bg-zinc-100 md:hidden"
                 onClick={() => setOpen(true)}
                 type="button"
               >
-                <Menu size={18} />
+                <Menu size={16} />
               </button>
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted">
-                  {isDashboard ? "Operations overview" : "Module workspace"}
+              <div className="min-w-0">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
+                  {isDashboard ? "Overview" : "Module"}
                 </p>
-                <h1 className="mt-1 text-xl font-semibold text-ink">
+                <h1 className="mt-0.5 truncate text-base font-semibold text-ink sm:text-lg md:text-xl">
                   {isDashboard
                     ? "Analytics & Dashboard"
                     : pathname.replace("/", "").replace(/-/g, " ")}
@@ -212,20 +212,20 @@ export function AppShell({ children, user }: AppShellProps) {
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
-              <div className="hidden rounded-full border border-line bg-white px-4 py-2 text-right sm:block">
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted">
+            <div className="flex shrink-0 items-center gap-2 md:gap-3">
+              <div className="hidden rounded-full border border-line bg-white px-3 py-1.5 text-right sm:block">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
                   {user.role}
                 </p>
-                <p className="text-sm font-semibold text-ink">{user.name}</p>
+                <p className="text-xs font-semibold text-ink">{user.name}</p>
               </div>
               <button
-                className="flex cursor-pointer items-center gap-2 rounded-full bg-black px-4 py-2 text-sm font-semibold text-white transition hover:bg-zinc-800 active:scale-95"
+                className="flex cursor-pointer items-center gap-1.5 rounded-full bg-black px-3 py-2 text-xs font-semibold text-white transition hover:bg-zinc-800 active:scale-95 md:gap-2 md:px-4"
                 onClick={logout}
                 type="button"
               >
-                <LogOut size={16} />
-                Logout
+                <LogOut size={14} />
+                <span className="hidden xs:inline sm:inline">Logout</span>
               </button>
             </div>
           </header>

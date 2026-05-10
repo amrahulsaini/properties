@@ -695,14 +695,14 @@ export function ResourceWorkspace({ module }: ResourceWorkspaceProps) {
         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-accent">
           {module.badge}
         </p>
-        <h2 className="mt-3 text-3xl font-semibold text-ink">{module.title}</h2>
-        <p className="mt-3 max-w-3xl text-sm leading-7 text-muted">
+        <h2 className="mt-2 text-2xl font-semibold text-ink sm:text-3xl">{module.title}</h2>
+        <p className="mt-2 max-w-3xl text-sm leading-7 text-muted">
           {module.subtitle}
         </p>
         {module.resource ? (
-          <div className="mt-5 flex flex-wrap gap-3">
+          <div className="mt-4 flex flex-wrap gap-2">
             <a
-              className="rounded-full bg-black px-5 py-3 text-xs font-semibold uppercase tracking-[0.24em] text-white"
+              className="rounded-full bg-black px-4 py-2.5 text-xs font-semibold uppercase tracking-[0.24em] text-white"
               href={`/api/v1/reports/export?resource=${module.resource}`}
               rel="noreferrer"
               target="_blank"
@@ -710,7 +710,7 @@ export function ResourceWorkspace({ module }: ResourceWorkspaceProps) {
               Export Excel
             </a>
             <a
-              className="rounded-full border border-line px-5 py-3 text-xs font-semibold uppercase tracking-[0.24em] text-muted"
+              className="rounded-full border border-line px-4 py-2.5 text-xs font-semibold uppercase tracking-[0.24em] text-muted"
               href={`/api/v1/reports/export-pdf?resource=${module.resource}`}
               rel="noreferrer"
               target="_blank"
@@ -960,74 +960,78 @@ export function ResourceWorkspace({ module }: ResourceWorkspaceProps) {
 
       {/* ── Records Modal ── */}
       {isRecordsModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-          <div className="relative flex max-h-[92vh] w-full max-w-7xl flex-col overflow-hidden rounded-[32px] bg-white shadow-2xl ring-1 ring-black/8">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 backdrop-blur-sm sm:items-center sm:p-4">
+          <div className="relative flex w-full max-w-7xl flex-col overflow-hidden bg-white shadow-2xl ring-1 ring-black/8 rounded-t-[28px] sm:rounded-[28px]" style={{ maxHeight: "92dvh" }}>
 
-            {/* Modal header */}
-            <div className="flex items-start justify-between gap-4 border-b border-line bg-black px-6 py-5">
-              <div className="min-w-0 flex-1">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-zinc-400">
-                  Live records · {module.title}
-                </p>
-                <h3 className="mt-1 text-xl font-semibold text-white">
-                  {loading ? (
-                    <span className="flex items-center gap-2 text-zinc-300 text-base">
-                      <OrbitalLoader size={36} />
-                      Loading...
-                    </span>
-                  ) : (
-                    <span>
-                      {filteredRows.length !== rows.length ? (
-                        <>
-                          <span className="text-accent">{filteredRows.length}</span>
-                          <span className="text-zinc-400"> / {rows.length} records</span>
-                        </>
-                      ) : (
-                        `${rows.length} ${module.title}`
-                      )}
-                    </span>
-                  )}
-                </h3>
+            {/* Modal header — stacks on mobile */}
+            <div className="shrink-0 border-b border-zinc-800 bg-black">
+              {/* Row 1: title + close */}
+              <div className="flex items-center justify-between gap-3 px-4 pt-4 pb-3 sm:px-6 sm:pt-5">
+                <div className="min-w-0">
+                  <p className="text-[9px] font-semibold uppercase tracking-[0.28em] text-zinc-500">
+                    Live records · {module.title}
+                  </p>
+                  <h3 className="mt-0.5 text-base font-semibold text-white sm:text-xl">
+                    {loading ? (
+                      <span className="flex items-center gap-2 text-zinc-300 text-sm">
+                        <OrbitalLoader size={28} />
+                        Loading…
+                      </span>
+                    ) : (
+                      <span>
+                        {filteredRows.length !== rows.length ? (
+                          <>
+                            <span className="text-accent">{filteredRows.length}</span>
+                            <span className="text-zinc-400"> / {rows.length}</span>
+                          </>
+                        ) : (
+                          `${rows.length} ${module.title}`
+                        )}
+                      </span>
+                    )}
+                  </h3>
+                </div>
+                <button
+                  className="shrink-0 cursor-pointer rounded-full border border-zinc-700 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-zinc-300 transition hover:border-white hover:text-white"
+                  onClick={() => setIsRecordsModalOpen(false)}
+                  type="button"
+                >
+                  Close
+                </button>
               </div>
 
-              {/* Search bar */}
-              <div className="relative flex-1 max-w-sm">
-                <Search
-                  size={15}
-                  className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none"
-                />
-                <input
-                  ref={searchInputRef}
-                  className="w-full rounded-full border border-zinc-700 bg-zinc-900 pl-10 pr-10 py-2.5 text-sm text-white placeholder-zinc-500 outline-none focus:border-accent focus:ring-1 focus:ring-accent transition"
-                  placeholder="Search records instantly..."
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-                {searchQuery ? (
-                  <button
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white transition"
-                    onClick={() => setSearchQuery("")}
-                    type="button"
-                  >
-                    <X size={14} />
-                  </button>
-                ) : null}
+              {/* Row 2: search — full width */}
+              <div className="px-4 pb-4 sm:px-6 sm:pb-5">
+                <div className="relative w-full">
+                  <Search
+                    size={14}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none"
+                  />
+                  <input
+                    ref={searchInputRef}
+                    className="w-full rounded-full border border-zinc-700 bg-zinc-900 py-2.5 pl-9 pr-9 text-sm text-white placeholder-zinc-500 outline-none focus:border-accent focus:ring-1 focus:ring-accent transition"
+                    placeholder="Search records instantly…"
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                  {searchQuery ? (
+                    <button
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white transition"
+                      onClick={() => setSearchQuery("")}
+                      type="button"
+                    >
+                      <X size={14} />
+                    </button>
+                  ) : null}
+                </div>
               </div>
-
-              <button
-                style={{ cursor: "pointer" }}
-                className="shrink-0 rounded-full border border-zinc-700 px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.2em] text-zinc-300 transition hover:border-white hover:text-white"
-                onClick={() => setIsRecordsModalOpen(false)}
-              >
-                Close
-              </button>
             </div>
 
             {/* Branch / Project summary strip */}
             {branchSummary.length > 0 ? (
-              <div className="border-b border-line bg-zinc-50 px-6 py-4">
-                <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.28em] text-zinc-400">
+              <div className="shrink-0 border-b border-line bg-zinc-50 px-4 py-3 sm:px-6 sm:py-4">
+                <p className="mb-2 text-[9px] font-bold uppercase tracking-[0.28em] text-zinc-400">
                   Branches
                 </p>
                 <div className="flex flex-wrap gap-2">
@@ -1072,7 +1076,7 @@ export function ResourceWorkspace({ module }: ResourceWorkspaceProps) {
             ) : null}
 
             {/* Records body */}
-            <div className="flex-1 overflow-auto bg-white/95 p-6 pb-12">
+            <div className="flex-1 overflow-auto bg-white/95 p-3 pb-8 sm:p-6 sm:pb-12">
               {loading ? (
                 <div className="flex flex-col items-center justify-center py-16 text-muted">
                   <svg className="animate-spin h-8 w-8 text-accent mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">

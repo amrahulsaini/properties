@@ -65,7 +65,10 @@ button:disabled {
 
 html {
   scroll-behavior: smooth;
-  font-size: 14px; /* Reduced global font size */
+  font-size: 14px;
+  /* Prevent horizontal overflow at the root level */
+  overflow-x: hidden;
+  max-width: 100vw;
 }
 
 body {
@@ -76,6 +79,13 @@ body {
   color: var(--ink);
   font-family: var(--font-sora), sans-serif;
   min-height: 100vh;
+  min-height: 100dvh;
+  /* Prevent any content from breaking the layout horizontally */
+  overflow-x: hidden;
+  max-width: 100vw;
+  /* Smoother tap behavior on iOS */
+  -webkit-tap-highlight-color: transparent;
+  touch-action: pan-y;
 }
 
 a {
