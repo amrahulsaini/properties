@@ -168,16 +168,21 @@ IconData _moduleIcon(String slug) {
   switch (slug) {
     case 'projects': return LucideIcons.building2;
     case 'plots': return LucideIcons.map;
-    case 'transactions': return LucideIcons.coins;
-    case 'money-transactions': return LucideIcons.indianRupee;
-    case 'advance-bookings': return LucideIcons.heartHandshake;
+    case 'transactions': return LucideIcons.heartHandshake;
+    case 'money-transactions': return LucideIcons.coins;
+    case 'advance-bookings': return LucideIcons.fileText;
     case 'advance-agreements': return LucideIcons.fileSignature;
-    case 'agents': return LucideIcons.userCheck;
+    case 'agents': return LucideIcons.users;
     case 'employees': return LucideIcons.briefcase;
-    case 'communications': return LucideIcons.messagesSquare;
-    case 'construction': return LucideIcons.hammer;
     case 'attendance': return LucideIcons.calendarCheck;
     case 'salary-tracker': return LucideIcons.wallet;
+    case 'performance': return LucideIcons.trendingUp;
+    case 'communications': return LucideIcons.messagesSquare;
+    case 'finance': return LucideIcons.indianRupee;
+    case 'construction': return LucideIcons.hammer;
+    case 'development-sites': return LucideIcons.shovel;
+    case 'documents': return LucideIcons.folderOpen;
+    case 'settings': return LucideIcons.settings2;
     case 'users': return LucideIcons.shield;
     default: return LucideIcons.layoutGrid;
   }

@@ -22,9 +22,16 @@ export const metadata: Metadata = {
   title: `${defaultBranding.productTitle} | ${defaultBranding.companyName}`,
   description:
     "Property, land, GST, agent, booking, construction, and document operations in one platform.",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "PropertySuite",
+  },
   icons: {
     icon: "/samarth-icon.ico",
     shortcut: "/samarth-icon.ico",
+    apple: "/samarth-logo.webp",
   },
 };
 
@@ -38,7 +45,21 @@ export default function RootLayout({
       lang="en"
       className={`${sora.variable} ${devanagari.variable} ${mono.variable} h-full antialiased`}
     >
-      <body className="min-h-full bg-app text-ink">{children}</body>
+      <head>
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="theme-color" content="#F26A1B" />
+        <link rel="apple-touch-icon" href="/samarth-logo.webp" />
+      </head>
+      <body className="min-h-full bg-app text-ink">
+        {children}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `if ('serviceWorker' in navigator) { navigator.serviceWorker.register('/sw.js'); }`,
+          }}
+        />
+      </body>
     </html>
   );
 }

@@ -439,6 +439,8 @@ function DocumentCard({
     await uploadFile(file);
   }
 
+  const isAadhaar = docType.value === "aadhaar_front" || docType.value === "aadhaar_back";
+
   function handlePrint() {
     if (!existing) return;
     const fileUrl = `/api/v1/documents/file/${existing.id}`;
@@ -453,6 +455,34 @@ function DocumentCard({
       </style>
       </head><body>
       <img src="${fileUrl}" onload="window.print();window.close();" />
+      </body></html>
+    `);
+    win.document.close();
+  }
+
+  function handlePrintBoth() {
+    if (!existing) return;
+    const frontDoc = documents.find(
+      (d) => String(d.section) === section && String(d.document_type) === "aadhaar_front",
+    );
+    const backDoc = documents.find(
+      (d) => String(d.section) === section && String(d.document_type) === "aadhaar_back",
+    );
+    if (!frontDoc || !backDoc) return;
+    const frontUrl = `/api/v1/documents/file/${frontDoc.id}`;
+    const backUrl = `/api/v1/documents/file/${backDoc.id}`;
+    const win = window.open("", "_blank");
+    if (!win) return;
+    win.document.write(`
+      <html><head><title>Print Aadhaar</title>
+      <style>
+        @page { size: portrait; margin: 8mm; }
+        body { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 8mm; }
+        img { width: 100%; max-width: 85mm; object-fit: contain; }
+      </style>
+      </head><body>
+      <img src="${frontUrl}" id="front" />
+      <img src="${backUrl}" id="back" onload="window.print();window.close();" />
       </body></html>
     `);
     win.document.close();
@@ -542,12 +572,22 @@ function DocumentCard({
               </button>
               <button
                 className="flex items-center gap-1 rounded-full border border-line px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted hover:border-black hover:text-black transition"
-                onClick={() => setPrintSettingsOpen(true)}
+                onClick={() => isAadhaar ? handlePrint() : setPrintSettingsOpen(true)}
                 type="button"
               >
                 <Printer size={10} />
                 Print
               </button>
+              {docType.value === "aadhaar_back" && (
+                <button
+                  className="flex items-center gap-1 rounded-full border border-accent/40 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-accent hover:border-accent hover:bg-accent/5 transition"
+                  onClick={handlePrintBoth}
+                  type="button"
+                >
+                  <Printer size={10} />
+                  Print Both
+                </button>
+              )}
               <button
                 className="flex items-center gap-1 rounded-full border border-line px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-red-500 hover:border-red-400 hover:bg-red-50 transition disabled:opacity-50"
                 disabled={deleting}
@@ -581,27 +621,90 @@ function SectionAccordion({
   onUploaded: () => void;
 }) {
   const [open, setOpen] = useState(section.value === "buyer");
+  const [printSettingsOpen, setPrintSettingsOpen] = useState(false);
+  const [printSettings, setPrintSettings] = useState<PrintSettings>({
+    printLayout: "a4",
+    aadhaarLayout: "front-back",
+    pageOrientation: "portrait",
+    dpiQuality: "standard",
+    colorMode: "color",
+    exportType: "print",
+  });
 
   const sectionDocs = documents.filter((d) => String(d.section) === section.value);
   const uploadedCount = sectionDocs.length;
 
+  const aadhaarFront = sectionDocs.find((d) => String(d.document_type) === "aadhaar_front");
+  const aadhaarBack = sectionDocs.find((d) => String(d.document_type) === "aadhaar_back");
+
+  function handlePrintAadhaar() {
+    if (!aadhaarFront && !aadhaarBack) return;
+    const frontUrl = aadhaarFront ? `/api/v1/documents/file/${aadhaarFront.id}` : null;
+    const backUrl = aadhaarBack ? `/api/v1/documents/file/${aadhaarBack.id}` : null;
+    const grayFilter = printSettings.colorMode === "bw" ? "grayscale(1)" : "none";
+    const orientation = printSettings.pageOrientation === "landscape" ? "landscape" : "portrait";
+
+    const win = window.open("", "_blank");
+    if (!win) return;
+
+    const imgs = [frontUrl, backUrl].filter(Boolean) as string[];
+    const lastSrc = imgs[imgs.length - 1];
+    const imgTags = imgs
+      .map((src) =>
+        `<img src="${src}" ${src === lastSrc ? `onload="window.print();window.close();"` : ""} style="width:100%;max-width:85mm;object-fit:contain;filter:${grayFilter};" />`,
+      )
+      .join("\n");
+
+    win.document.write(`<!DOCTYPE html><html><head><title>Print Aadhaar – ${section.label}</title>
+<style>
+@page { size: ${orientation}; margin: 8mm; }
+body { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 8mm; }
+</style></head><body>
+${imgTags}
+</body></html>`);
+    win.document.close();
+  }
+
   return (
     <div className="rounded-2xl border border-line bg-white overflow-hidden">
-      <button
-        className="flex w-full items-center justify-between px-5 py-4 text-left hover:bg-zinc-50 transition"
+      {printSettingsOpen && (
+        <PrintSettingsModal
+          settings={printSettings}
+          onChange={setPrintSettings}
+          onPrint={() => { setPrintSettingsOpen(false); handlePrintAadhaar(); }}
+          onClose={() => setPrintSettingsOpen(false)}
+          title={`Print Aadhaar – ${section.label}`}
+        />
+      )}
+
+      {/* Header row — div instead of button to allow nested button for Print Aadhaar */}
+      <div
+        className="flex w-full items-center justify-between px-5 py-4 cursor-pointer hover:bg-zinc-50 transition select-none"
         onClick={() => setOpen((o) => !o)}
-        type="button"
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setOpen((o) => !o); }}
+        role="button"
+        tabIndex={0}
       >
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <span className="text-sm font-semibold text-ink">{section.label}</span>
           {uploadedCount > 0 && (
             <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-bold uppercase text-accent">
               {uploadedCount} uploaded
             </span>
           )}
+          {(aadhaarFront ?? aadhaarBack) && (
+            <button
+              className="flex items-center gap-1 rounded-full border border-line px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted hover:border-accent hover:text-accent transition"
+              onClick={(e) => { e.stopPropagation(); setPrintSettingsOpen(true); }}
+              type="button"
+            >
+              <Printer size={10} />
+              Print Aadhaar
+            </button>
+          )}
         </div>
         {open ? <ChevronUp size={16} className="text-muted" /> : <ChevronDown size={16} className="text-muted" />}
-      </button>
+      </div>
 
       {open && (
         <div className="border-t border-line p-4">

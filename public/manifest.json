@@ -1,0 +1,26 @@
+{
+  "name": "Samarth PropertySuite",
+  "short_name": "PropertySuite",
+  "description": "Property, land, booking, construction, and document operations in one platform.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FFF7ED",
+  "theme_color": "#F26A1B",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/samarth-logo.webp",
+      "sizes": "192x192",
+      "type": "image/webp",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/samarth-logo.webp",
+      "sizes": "512x512",
+      "type": "image/webp",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["business", "productivity"],
+  "lang": "en"
+}

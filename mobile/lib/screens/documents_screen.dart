@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:open_file/open_file.dart';
 import '../services/api.dart';
 import '../theme.dart';
 import '../widgets/app_drawer.dart';
+import 'document_folder_screen.dart';
 
 class DocumentsScreen extends StatefulWidget {
   const DocumentsScreen({super.key});
@@ -15,6 +17,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> with SingleTickerProv
   late TabController _tabs;
   List<Map<String, dynamic>> _folders = [], _files = [];
   bool _loading = true;
+  final Set<dynamic> _pdfLoading = {};
 
   @override
   void initState() {
@@ -69,6 +72,18 @@ class _DocumentsScreenState extends State<DocumentsScreen> with SingleTickerProv
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
     }
+  }
+
+  Future<void> _downloadFolderPdf(Map<String, dynamic> folder) async {
+    final id = folder['id'];
+    setState(() => _pdfLoading.add(id));
+    try {
+      final path = await downloadPdf('/api/v1/document-folders/$id/pdf');
+      await OpenFile.open(path);
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))));
+    }
+    if (mounted) setState(() => _pdfLoading.remove(id));
   }
 
   Future<void> _deleteFile(Map<String, dynamic> file) async {
@@ -146,9 +161,30 @@ class _DocumentsScreenState extends State<DocumentsScreen> with SingleTickerProv
                               decoration: kCardDecoration,
                               child: ListTile(
                                 leading: const Icon(LucideIcons.folder, color: kAccent, size: 22),
-                                title: Text(f['name'] ?? '', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                                subtitle: Text('${f['file_count'] ?? 0} files', style: const TextStyle(fontSize: 12, color: kMuted)),
-                                trailing: const Icon(LucideIcons.chevronRight, size: 16, color: kMuted),
+                                title: Text(f['name'] ?? f['buyer_name'] ?? '', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                                subtitle: Text(
+                                  [
+                                    if ((f['folder_code'] ?? '').toString().isNotEmpty) 'Dast: ${f['folder_code']}',
+                                    if ((f['plot_number'] ?? '').toString().isNotEmpty) 'Plot: ${f['plot_number']}',
+                                  ].join('  ·  ').isNotEmpty
+                                      ? [
+                                          if ((f['folder_code'] ?? '').toString().isNotEmpty) 'Dast: ${f['folder_code']}',
+                                          if ((f['plot_number'] ?? '').toString().isNotEmpty) 'Plot: ${f['plot_number']}',
+                                        ].join('  ·  ')
+                                      : '${f['file_count'] ?? 0} files',
+                                  style: const TextStyle(fontSize: 12, color: kMuted),
+                                ),
+                                trailing: _pdfLoading.contains(f['id'])
+                                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: kAccent, strokeWidth: 2))
+                                    : IconButton(
+                                        icon: const Icon(LucideIcons.fileDown, size: 18, color: kAccent),
+                                        tooltip: 'Download PDF Pack',
+                                        onPressed: () => _downloadFolderPdf(f),
+                                        padding: EdgeInsets.zero,
+                                        constraints: const BoxConstraints(),
+                                      ),
+                                onTap: () => Navigator.push(context,
+                                    MaterialPageRoute(builder: (_) => DocumentFolderScreen(folder: f))),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                               ),
                             );

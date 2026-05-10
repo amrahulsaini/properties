@@ -1,6 +1,8 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
 
 const _baseUrl = 'https://samarthrealty.properties';
 const _tokenKey = 'ps_auth_token';
@@ -78,6 +80,20 @@ Future<void> logout() async {
     await apiPost('/api/v1/auth/logout', {});
   } catch (_) {}
   await clearToken();
+}
+
+Future<String> downloadPdf(String path, {Map<String, String>? params}) async {
+  final token = await getToken();
+  var uri = Uri.parse('$_baseUrl$path');
+  if (params != null && params.isNotEmpty) uri = uri.replace(queryParameters: params);
+  final res = await http.get(uri, headers: {
+    if (token != null) 'Authorization': 'Bearer $token',
+  });
+  if (res.statusCode >= 400) throw Exception('PDF generation failed (${res.statusCode})');
+  final dir = await getTemporaryDirectory();
+  final file = File('${dir.path}/samarth_${DateTime.now().millisecondsSinceEpoch}.pdf');
+  await file.writeAsBytes(res.bodyBytes);
+  return file.path;
 }
 
 Future<String> uploadFile(String filePath, String mimeType, String filename) async {
