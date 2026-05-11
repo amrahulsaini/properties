@@ -20,19 +20,21 @@ const connection = await mysql.createConnection({
   password: env.DB_PASSWORD,
 });
 
-const email = "Psikoli556@gmail.com";
-const password = "koli@321";
-const fullName = "Psikoli";
-const role = "agent";
+const users = [
+  { fullName: "Psikoli", email: "Psikoli556@gmail.com", password: "koli@321", role: "agent" },
+  { fullName: "Amrahul Saini", email: "ammrahulsaini@gmail.com", password: "rahul@123", role: "admin" },
+];
 
-const passwordHash = await hash(password, 12);
+for (const user of users) {
+  const passwordHash = await hash(user.password, 12);
+  await connection.execute(
+    `INSERT INTO users (full_name, email, role, password_hash, status)
+     VALUES (?, ?, ?, ?, 'active')
+     ON DUPLICATE KEY UPDATE password_hash = VALUES(password_hash), role = VALUES(role), status = 'active'`,
+    [user.fullName, user.email, user.role, passwordHash],
+  );
+  console.log(`✓ ${user.email} (${user.role})`);
+}
 
-await connection.execute(
-  `INSERT INTO users (full_name, email, role, password_hash, status)
-   VALUES (?, ?, ?, ?, 'active')
-   ON DUPLICATE KEY UPDATE password_hash = VALUES(password_hash), status = 'active'`,
-  [fullName, email, role, passwordHash],
-);
-
-console.log(`User ${email} inserted successfully with role '${role}'.`);
 await connection.end();
+console.log("Done.");
