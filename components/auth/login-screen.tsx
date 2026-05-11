@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { defaultBranding } from "@/lib/brand";
 
@@ -124,6 +125,15 @@ export function LoginScreen() {
               >
                 {loading ? "Signing in..." : "Enter PropertySuite"}
               </button>
+
+              <div className="text-center">
+                <Link
+                  href="/forgot-password"
+                  className="text-xs text-muted transition-colors hover:text-accent"
+                >
+                  Forgot Password?
+                </Link>
+              </div>
             </form>
 
             <div className="mt-6 text-sm leading-7 text-muted">
